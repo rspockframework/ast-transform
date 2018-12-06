@@ -8,8 +8,10 @@ module ASTTransform
     # Constructs a new Transformer instance.
     #
     # @param transformations [Array<ASTTransform::AbstractTransformation>] The transformations to be run.
-    def initialize(*transformations)
+    # @param builder [Parser::Builders::Default] The AST Node builder.
+    def initialize(*transformations, builder: Parser::Builders::Default.new)
       @transformations = transformations
+      @builder = builder
     end
 
     # Builds the AST for the given +source+.
@@ -97,7 +99,7 @@ module ASTTransform
 
     def parser
       @parser&.reset
-      @parser ||= Parser::CurrentRuby.new
+      @parser ||= Parser::CurrentRuby.new(@builder)
     end
 
     def register_source_map(source_file_path, transformed_file_path, transformed_ast, transformed_source)
