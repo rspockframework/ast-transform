@@ -6,6 +6,8 @@ require 'ast_transform/instruction_sequence/mixin'
 require 'ast_transform/instruction_sequence/bootsnap_mixin'
 
 module ASTTransform
+  DEFAULT_OUTPUT_PATH = Pathname.new("").join("tmp", "ast_transform").to_s
+
   class << self
     def acronyms
       @acronyms ||= []
@@ -28,6 +30,14 @@ module ASTTransform
           end
         end
       end
+    end
+
+    def output_path=(path)
+      @output_path = path
+    end
+
+    def output_path
+      @output_path || DEFAULT_OUTPUT_PATH
     end
   end
 end
