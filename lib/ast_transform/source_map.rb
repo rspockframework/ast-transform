@@ -107,8 +107,11 @@ module ASTTransform
     def source_line(line_number)
       if @lines.key?(line_number)
         @lines[line_number].each do |dig_array|
-          result = approximate_dig_last_valid_node(@source_ranges_ast, dig_array)&.loc&.expression&.line
-          return result if result
+          source_node = approximate_dig_last_valid_node(@source_ranges_ast, dig_array)
+          next unless source_node
+
+          range = search_range(source_node, 1)
+          return range.line if range
         end
       end
 
@@ -152,6 +155,30 @@ module ASTTransform
       node.children.each do |child_node|
         result = search_node(child_node, queried_node)
         return result if result
+      end
+
+      nil
+    end
+
+    # Recursively search the given +node+ for a range.
+    #
+    # @param node [Parser::AST::Node] The current node to search in.
+    # @param max_range [Integer|nil] The max range to consider valid. Nil means any range is valid. If 1, only ranges
+    # which span one line will be considered, etc...
+    #
+    # @return [Parser::Source::Range|nil] The range, or nil if no range was found. This occurs when the tree contains
+    # no ranges, i.e. they're all virtually built nodes.
+    def search_range(node, max_range = nil)
+      return unless node&.is_a?(Parser::AST::Node)
+
+      range = node.loc&.expression
+      if range && max_range && range.last_line - range.line < max_range || range && max_range.nil?
+        return range
+      else
+        node.children.each do |child_node|
+          result = search_range(child_node, max_range)
+          return result if result
+        end
       end
 
       nil
