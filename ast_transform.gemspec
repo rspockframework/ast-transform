@@ -36,6 +36,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "minitest-reporters", "~> 1.4"
   spec.add_development_dependency "pry", "~> 0.13"
   spec.add_development_dependency "pry-byebug", "~> 3.9"
+  spec.add_development_dependency "coveralls", "~> 0.8"
 
   # Runtime dependencies
   spec.add_runtime_dependency "parser", "~> 2.7"
