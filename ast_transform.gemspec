@@ -20,6 +20,14 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
+  if ENV['TRAVIS']
+    if ENV['TRAVIS_TAG'].nil? || ENV['TRAVIS_TAG'].empty?
+      spec.version = "#{spec.version}-alpha-#{ENV['TRAVIS_BUILD_NUMBER']}"
+    elsif ENV['TRAVIS_TAG'] != spec.version.to_s
+      raise "Tag name (#{ENV['TRAVIS_TAG']}) and Gem version (#{spec.version}) are different"
+    end
+  end
+
   # Development dependencies
   spec.add_development_dependency "bundler", "~> 2.1"
   spec.add_development_dependency "rake", "~> 13.0"
