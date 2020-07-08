@@ -7,6 +7,7 @@ install: "./bin/setup"
 deploy:
   provider: rubygems
   gemspec: ast_transform.gemspec
+  gem: ast_transform
   on:
     branch: master
     tag: true
