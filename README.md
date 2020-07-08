@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/rspockframework/ast-transform.svg?branch=master)](https://travis-ci.org/rspockframework/ast-transform)
+
 # ASTTransform
 
 ASTTransform is an Abstract Syntax Tree (AST) transformation framework. It hooks into the compilation process and allows to perform AST transformations using an annotation: `transform!`.
