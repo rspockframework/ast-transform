@@ -12,6 +12,7 @@ jobs:
     - stage: deploy
       rvm: 2.7
       install: ./bin/setup
+      script: echo Deploy
       deploy:
         provider: rubygems
         gemspec: ast_transform.gemspec
