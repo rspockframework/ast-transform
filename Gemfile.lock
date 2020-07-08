@@ -60,9 +60,9 @@ DEPENDENCIES
   ast_transform!
   bundler (~> 2.1)
   minitest (~> 5.14)
-  minitest-reporters (~> 1.4.2)
-  pry
-  pry-byebug
+  minitest-reporters (~> 1.4)
+  pry (~> 0.13)
+  pry-byebug (~> 3.9)
   rake (~> 13.0)
 
 BUNDLED WITH
