@@ -19,6 +19,7 @@ Gem::Specification.new do |spec|
   spec.bindir        = "exe"
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
+  spec.required_ruby_version = '~> 2.2'
 
   if ENV['TRAVIS']
     if ENV['TRAVIS_TAG'].nil? || ENV['TRAVIS_TAG'].empty?
