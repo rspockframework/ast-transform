@@ -1,0 +1,12 @@
+language: ruby
+rvm:
+- '2.5'
+- '2.6'
+- '2.7'
+deploy:
+  provider: rubygems
+  api_key:
+    secure: t5m8VFKehxbAGzz3A0+BN0gxHO+EUlIKr5nHIo5o18BdFCeCjwbq6jgMgs9WB70k9f1G2EVSyn3uWkfmH3/91siseDxKSeWM5/vySqoMwFEY8WKBzYQ1YstAFaq42mab6vU5CqO7V6nAY4kOwdM6zMqPICf71FcWUHofjusPN79OYWjEg2iRDMk4VoHhYEKMi9Vy8mX+I2nhGOFl/S1XciuO2GyDUCazQyCMZ9vY9rSEcrAA4ZsWBDQSsdcumahSOEvS0z7VsXrhXhFemkquCEpjcIbDU0JwHSYHOXCIpyDw5f30p7EQX71QJoXmPywXsAV2zt74Bj8uh92bJ/HQmovSzyEabey7hsQl8ksM0pLFXIz6mUtbignQYT2W9ispy2DjauY5vhszHsGsdECftFBD4MkIbvAtmx8OCfIGxcNZnOszBf/3B5RELtJuKcYNS7vIzdwCgwDaExolLEJfOMpzwOyNCfm1xIOLxqDWUeSF7yd8iZbP2ZdNgKTzJgtpILzkm3K8vmZFRnyGWmROeRaOdZlEnSHEC2bLBdfvQM9g1/gy0kosTIIoXpDhon4FmiHflnSo6saVRIoy16oL+4Kh0SPSc1MB9Qzcdr4iw2ngGBL95RAtFx4Yg0uqF/q/uuydWMcJiTZB430F/eHanmd7hgw8OrOU49Zqy6DiX+o=
+  gemspec: ast_transform.gemspec
+  on:
+    tags: true
