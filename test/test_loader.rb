@@ -10,7 +10,6 @@ SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new(
 )
 SimpleCov.start do
   add_filter('/test/')
-  add_filter('/tmp/')
 end
 
 $LOAD_PATH.unshift(File.expand_path("../../lib", __FILE__))
