@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/rspockframework/ast-transform.svg?branch=master)](https://travis-ci.org/rspockframework/ast-transform)
-[![Coverage Status](https://coveralls.io/repos/github/rspockframework/ast-transform/badge.svg?branch=code-coverage)](https://coveralls.io/github/rspockframework/ast-transform?branch=code-coverage)
+[![Coverage Status](https://coveralls.io/repos/github/rspockframework/ast-transform/badge.svg?branch=master)](https://coveralls.io/github/rspockframework/ast-transform?branch=master)
 
 # ASTTransform
 
