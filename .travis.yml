@@ -19,6 +19,5 @@ jobs:
         gem: ast_transform
         on:
           branch: master
-          tag: true
         api_key:
           secure: a+D7+wUWmgdk39C+oDFAqjLDAE9s8uaN08xPgf0/IaxFy3PGeuxKSi+3ZFaB0f6zI203mMe7m0sNVD77PxyPqKToKal5K9240+m9yZGoS4seMOJExcBmhiMXk8KOj9upw5Fk0PY91LY5lU13m6u40MtHT9r8da8AysO21PGhkrDkYZNGZ/0nCpV3hnux6DOlNguUhHuuKIKCY6xN9tldwUhVZJvDjSKLe0aRMbP0PZhM3JzMz9BfosirkdE9u666ryI5kIFfHgzDCekiU1sbEugOKyHyu90kaVhgRAXA81LHirj6U9pA0cfJOq84EAE2di6A0xswlbM8GBXdJpRIh706A6sZ7ByYG2SlxyF9vHogqhpg8aU5IMk+sNbrg6++qyTW8zSTksoJN/kMAHcEvMloK4Ja2rRPqhIJkawcQRd5unxHnt4jc6ED2ryDbXhAaBWX4G80jpg5lSeHIQH/S9v+PWcG9UB8Rv08oiJadEid+26r4rWsRA0f/hBP6K+KMq3rACa2Xapgo9ZbSE4xBBu+Yc+4ooiKQ42y+10A5TlTI6iSxKUDcmbH/qVZIchzlDv4MFYoE50BHVn9p0J6dbf8q+WQXsRi1ojEcVy95hd00wdmeMGItE7VuW8zDObJ5W8LNaKuKD358o+4v5CrammfNNz/MynRXhfmPCwyy8s=
