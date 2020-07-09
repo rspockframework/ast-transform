@@ -2,7 +2,7 @@ PATH
   remote: .
   specs:
     ast_transform (1.0.0)
-      parser (~> 2.7)
+      parser (~> 2.5)
       unparser (~> 0.4)
 
 GEM

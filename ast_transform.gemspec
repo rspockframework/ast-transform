@@ -39,6 +39,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "coveralls", "~> 0.8"
 
   # Runtime dependencies
-  spec.add_runtime_dependency "parser", "~> 2.7"
+  spec.add_runtime_dependency "parser", "~> 2.5"
   spec.add_runtime_dependency "unparser", "~> 0.4"
 end
