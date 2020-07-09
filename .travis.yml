@@ -12,7 +12,11 @@ jobs:
     - stage: deploy
       rvm: 2.7
       install: ./bin/setup
-      script: echo Deploy
+      script:
+        - echo Deploy
+        - echo $TRAVIS_PULL_REQUEST
+        - echo $TRAVIS_BRANCH
+        - echo $TRAVIS_TAG
       deploy:
         provider: rubygems
         gemspec: ast_transform.gemspec
