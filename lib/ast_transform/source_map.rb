@@ -1,5 +1,5 @@
 # frozen_string_literal: true
-require 'parser/current'
+require 'parser'
 
 module ASTTransform
   class SourceMap
