@@ -31,5 +31,6 @@ Gem::Specification.new do |spec|
 
   # Runtime dependencies
   spec.add_runtime_dependency "parser", ">= 3.0"
+  spec.add_runtime_dependency "prism", ">= 1.5"
   spec.add_runtime_dependency "unparser", ">= 0.6"
 end

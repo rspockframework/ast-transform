@@ -1,5 +1,6 @@
 # frozen_string_literal: true
-require 'parser/current'
+require 'prism'
+require 'prism/translation/parser'
 require 'unparser'
 require 'ast_transform/source_map'
 
@@ -8,8 +9,8 @@ module ASTTransform
     # Constructs a new Transformer instance.
     #
     # @param transformations [Array<ASTTransform::AbstractTransformation>] The transformations to be run.
-    # @param builder [Parser::Builders::Default] The AST Node builder.
-    def initialize(*transformations, builder: Parser::Builders::Default.new)
+    # @param builder [Prism::Translation::Parser::Builder] The AST Node builder.
+    def initialize(*transformations, builder: Prism::Translation::Parser::Builder.new)
       @transformations = transformations
       @builder = builder
     end
@@ -99,7 +100,7 @@ module ASTTransform
 
     def parser
       @parser&.reset
-      @parser ||= Parser::CurrentRuby.new(@builder)
+      @parser ||= Prism::Translation::Parser.new(@builder)
     end
 
     def register_source_map(source_file_path, transformed_file_path, transformed_ast, transformed_source)
