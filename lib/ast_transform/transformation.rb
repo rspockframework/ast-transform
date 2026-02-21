@@ -16,11 +16,19 @@ module ASTTransform
         process_node_helper(child_node, previous_sibling)
       end
 
+      count_before_reject = children.size
+
       children.reject!.with_index { |child_node, index|
         transform_node?(child_node) && transformable_node?(next_child(node, index))
       }
 
-      node.updated(nil, process_all(children))
+      processed = process_all(children)
+
+      if node.type == :begin && processed.size == 1 && children.size < count_before_reject
+        processed.first
+      else
+        node.updated(nil, processed)
+      end
     end
 
     def previous_child(node, index)
