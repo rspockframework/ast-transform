@@ -148,5 +148,57 @@ module ASTTransform
 
       assert_equal expected, transform(source, @transformation)
     end
+
+    test "begin node is preserved when no transform! annotations are present" do
+      source = <<~HEREDOC
+        class Foo
+        end
+
+        class Bar
+        end
+      HEREDOC
+
+      expected = <<~HEREDOC
+        class Foo
+        end
+
+        class Bar
+        end
+      HEREDOC
+
+      assert_equal expected, transform(source, @transformation)
+    end
+
+    test "begin node is preserved when non-transformable siblings remain after transform! removal" do
+      source = <<~HEREDOC
+        transform!(ASTTransform::TransformationTest::FooTransformation)
+        class Potato
+        end
+
+        class Bar
+        end
+      HEREDOC
+
+      expected = <<~HEREDOC
+        foo
+
+        class Bar
+        end
+      HEREDOC
+
+      assert_equal expected, transform(source, @transformation)
+    end
+
+    test "transform! runs the transformation on a constant assignment node" do
+      source = <<~HEREDOC
+        transform!(ASTTransform::TransformationTest::FooTransformation)
+        Potato = Class.new do
+        end
+      HEREDOC
+
+      expected = "foo"
+
+      assert_equal expected, transform(source, @transformation)
+    end
   end
 end
