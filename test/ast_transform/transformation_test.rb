@@ -42,11 +42,9 @@ module ASTTransform
         transform!(FooTransformation)
       HEREDOC
 
-      expected = <<~HEREDOC
-        transform!(FooTransformation)
-      HEREDOC
+      expected = "transform!(FooTransformation)"
 
-      assert_equal strip_end_line(expected), transform(source, @transformation)
+      assert_equal expected, transform(source, @transformation)
     end
 
     test "transform! is not considered an annotation if it does not annotate anything" do
@@ -62,7 +60,7 @@ module ASTTransform
         transform!(FooTransformation)
       HEREDOC
 
-      assert_equal strip_end_line(expected), transform(source, @transformation)
+      assert_equal expected, transform(source, @transformation)
     end
 
     test "transform! is not considered an annotation if it does not have arguments" do
@@ -74,11 +72,12 @@ module ASTTransform
 
       expected = <<~HEREDOC
         transform!
+
         class Potato
         end
       HEREDOC
 
-      assert_equal strip_end_line(expected), transform(source, @transformation)
+      assert_equal expected, transform(source, @transformation)
     end
 
     test "transform! runs the transformation if annotating a Class node" do
@@ -88,11 +87,9 @@ module ASTTransform
         end
       HEREDOC
 
-      expected = <<~HEREDOC
-        foo
-      HEREDOC
+      expected = "foo"
 
-      assert_equal strip_end_line(expected), transform(source, @transformation)
+      assert_equal expected, transform(source, @transformation)
     end
 
     test "multiple transform! on the same level each run their transformation" do
@@ -111,7 +108,7 @@ module ASTTransform
         foo
       HEREDOC
 
-      assert_equal strip_end_line(expected), transform(source, @transformation)
+      assert_equal expected, transform(source, @transformation)
     end
 
     test "nested transform! each run their transformation" do
@@ -130,7 +127,7 @@ module ASTTransform
         end
       HEREDOC
 
-      assert_equal strip_end_line(expected), transform(source, @transformation)
+      assert_equal expected, transform(source, @transformation)
     end
 
     test "transform! will run the transformation on the following node only" do
@@ -149,7 +146,7 @@ module ASTTransform
         end
       HEREDOC
 
-      assert_equal strip_end_line(expected), transform(source, @transformation)
+      assert_equal expected, transform(source, @transformation)
     end
   end
 end

@@ -67,7 +67,7 @@ module ASTTransform
 
       assert_equal @source_ast, ast
     ensure
-      File.delete(pathname.to_s) if File.exists?(pathname.to_s)
+      File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end
 
     test "#transform with no transformation" do
@@ -91,7 +91,7 @@ module ASTTransform
 
       assert_equal 'foo_bar', transformed_source
     ensure
-      File.delete(pathname.to_s) if File.exists?(pathname.to_s)
+      File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end
 
     test "#transform_file_source returns the expected transformed code" do
@@ -107,7 +107,7 @@ module ASTTransform
 
       assert_equal 'foo_bar', transformed_source
     ensure
-      File.delete(pathname.to_s) if File.exists?(pathname.to_s)
+      File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end
 
     test "#transform_ast with no transformation" do

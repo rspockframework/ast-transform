@@ -22,13 +22,9 @@ module ASTTransform
         method_call
       HEREDOC
 
-      expected_transformed_source = <<~HEREDOC
-        method_call + 1
-      HEREDOC
-
       actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
 
-      assert_equal strip_end_line(expected_transformed_source), actual_transformed_source
+      assert_equal "method_call + 1", actual_transformed_source
 
       source_map = ASTTransform::SourceMap.for_file_path('transformed')
 
@@ -48,13 +44,9 @@ module ASTTransform
         method_call
       HEREDOC
 
-      expected_transformed_source = <<~HEREDOC
-        method_call + 1
-      HEREDOC
-
       actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
 
-      assert_equal strip_end_line(expected_transformed_source), actual_transformed_source
+      assert_equal "method_call + 1", actual_transformed_source
 
       transformer.transform_file_source(source, 'src', 'transformed')
       source_map = ASTTransform::SourceMap.for_file_path('transformed')
@@ -76,13 +68,9 @@ module ASTTransform
         method_call2
       HEREDOC
 
-      expected_transformed_source = <<~HEREDOC
-        method_call1 + method_call2
-      HEREDOC
-
       actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
 
-      assert_equal strip_end_line(expected_transformed_source), actual_transformed_source
+      assert_equal "method_call1 + method_call2", actual_transformed_source
 
       source_map = ASTTransform::SourceMap.for_file_path('transformed')
 
@@ -109,7 +97,7 @@ module ASTTransform
 
       actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
 
-      assert_equal strip_end_line(expected_transformed_source), actual_transformed_source
+      assert_equal expected_transformed_source, actual_transformed_source
 
       source_map = ASTTransform::SourceMap.for_file_path('transformed')
 
@@ -130,13 +118,9 @@ module ASTTransform
         method_call1 + method_call2
       HEREDOC
 
-      expected_transformed_source = <<~HEREDOC
-        1 + 2
-      HEREDOC
-
       actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
 
-      assert_equal strip_end_line(expected_transformed_source), actual_transformed_source
+      assert_equal "1 + 2", actual_transformed_source
 
       source_map = ASTTransform::SourceMap.for_file_path('transformed')
 
