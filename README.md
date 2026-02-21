@@ -1,5 +1,5 @@
 [![CI](https://github.com/rspockframework/ast-transform/actions/workflows/ci.yml/badge.svg)](https://github.com/rspockframework/ast-transform/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/rspockframework/ast-transform/branch/main/graph/badge.svg)](https://codecov.io/gh/rspockframework/ast-transform)
+[![codecov](https://codecov.io/gh/rspockframework/ast-transform/branch/master/graph/badge.svg)](https://codecov.io/gh/rspockframework/ast-transform)
 
 # ASTTransform
 
