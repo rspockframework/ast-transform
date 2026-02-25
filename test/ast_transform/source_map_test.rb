@@ -105,6 +105,20 @@ module ASTTransform
       assert_equal 1, source_map.line(2)
     end
 
+    test "source map is retrievable by source file path" do
+      transformer = ASTTransform::Transformer.new
+
+      source = <<~HEREDOC
+        method_call
+      HEREDOC
+
+      transformer.transform_file_source(source, '/original/path.rb', '/transformed/path.rb')
+
+      source_map = ASTTransform::SourceMap.for_file_path('/original/path.rb')
+      refute_nil source_map, "source map should be retrievable by source file path"
+      assert_equal '/original/path.rb', source_map.source_file_path
+    end
+
     test "#line returns nil when transformation creates nodes that don't contain previous nodes" do
       transformation = Class.new(ASTTransform::AbstractTransformation) do
         def run(node)

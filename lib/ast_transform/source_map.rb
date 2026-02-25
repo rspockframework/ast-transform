@@ -11,6 +11,7 @@ module ASTTransform
       # @return [void]
       def register_source_map(source_map)
         source_maps[source_map.transformed_file_path] = source_map
+        source_maps[source_map.source_file_path] = source_map
 
         nil
       end

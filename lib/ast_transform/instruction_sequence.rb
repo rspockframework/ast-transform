@@ -16,7 +16,7 @@ module ASTTransform
         rewritten_source = transformer.transform_file_source(source, source_path, rewritten_file_pathname.to_s)
         write(rewritten_source, rewritten_file_pathname)
 
-        RubyVM::InstructionSequence.compile(rewritten_source, rewritten_file_pathname.to_s, rewritten_file_pathname.to_s)
+        RubyVM::InstructionSequence.compile(rewritten_source, source_path, source_path)
       end
 
       def write_pathname(file_path)
