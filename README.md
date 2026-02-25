@@ -191,7 +191,7 @@ There are two ways to create a release. Both require that `version.rb` has alrea
 
 ### Via GitHub UI
 
-1. Update `VERSION` in `lib/ast_transform/version.rb`, commit, open a PR, and merge to main
+1. Update `VERSION` in `lib/ast_transform/version.rb` and run `bundle install` to regenerate `Gemfile.lock`, commit, open a PR, and merge to main
 2. Go to the repo on GitHub → **Releases** → **Draft a new release**
 3. Enter a new tag (e.g. `v2.0.0`), select `main` as the target branch
 4. Add a title and release notes (GitHub can auto-generate these from merged PRs)
@@ -199,7 +199,7 @@ There are two ways to create a release. Both require that `version.rb` has alrea
 
 ### Via CLI
 
-1. Update `VERSION` in `lib/ast_transform/version.rb`, commit, open a PR, and merge to main
+1. Update `VERSION` in `lib/ast_transform/version.rb` and run `bundle install` to regenerate `Gemfile.lock`, commit, open a PR, and merge to main
 2. Tag and push:
    ```
    git checkout main && git pull
