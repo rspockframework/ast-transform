@@ -189,6 +189,48 @@ module ASTTransform
       assert_equal expected, transform(source, @transformation)
     end
 
+    test "transform! preserves keyword arguments in method calls" do
+      source = <<~HEREDOC
+        transform!(ASTTransform::TransformationTest::ClassNamePrefixerTransformation)
+        class Foo
+          def setup
+            @obj = MyClass.new(bar: 1, baz: 2)
+          end
+        end
+      HEREDOC
+
+      expected = <<~HEREDOC
+        class PrefixFoo
+          def setup
+            @obj = MyClass.new(bar: 1, baz: 2)
+          end
+        end
+      HEREDOC
+
+      assert_equal expected, transform(source, @transformation)
+    end
+
+    test "transform! preserves keyword arguments mixed with positional arguments" do
+      source = <<~HEREDOC
+        transform!(ASTTransform::TransformationTest::ClassNamePrefixerTransformation)
+        class Foo
+          def call
+            method("hello", bar: 1)
+          end
+        end
+      HEREDOC
+
+      expected = <<~HEREDOC
+        class PrefixFoo
+          def call
+            method("hello", bar: 1)
+          end
+        end
+      HEREDOC
+
+      assert_equal expected, transform(source, @transformation)
+    end
+
     test "transform! runs the transformation on a constant assignment node" do
       source = <<~HEREDOC
         transform!(ASTTransform::TransformationTest::FooTransformation)

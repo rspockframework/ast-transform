@@ -2,6 +2,7 @@
 require 'prism'
 require 'prism/translation/parser'
 require 'unparser'
+require 'ast_transform/kwargs_builder'
 require 'ast_transform/source_map'
 
 module ASTTransform
@@ -9,10 +10,8 @@ module ASTTransform
     # Constructs a new Transformer instance.
     #
     # @param transformations [Array<ASTTransform::AbstractTransformation>] The transformations to be run.
-    # @param builder [Prism::Translation::Parser::Builder] The AST Node builder.
-    def initialize(*transformations, builder: Prism::Translation::Parser::Builder.new)
+    def initialize(*transformations)
       @transformations = transformations
-      @builder = builder
     end
 
     # Builds the AST for the given +source+.
@@ -100,7 +99,7 @@ module ASTTransform
 
     def parser
       @parser&.reset
-      @parser ||= Prism::Translation::Parser.new(@builder)
+      @parser ||= Prism::Translation::Parser.new(ASTTransform::KwargsBuilder.new)
     end
 
     def register_source_map(source_file_path, transformed_file_path, transformed_ast, transformed_source)
