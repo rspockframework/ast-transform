@@ -66,7 +66,7 @@ module ASTTransform
     #
     # @return [Integer] The line count.
     def line_count
-      @transformed_ranges_ast&.loc&.expression.last_line || 0
+      @transformed_ranges_ast&.loc&.expression&.last_line || 0
     end
 
     private
