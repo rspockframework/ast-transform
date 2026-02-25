@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    ast_transform (2.1.1)
+    ast_transform (2.1.2)
       parser (>= 3.0)
       prism (>= 1.5)
       unparser (>= 0.6)
