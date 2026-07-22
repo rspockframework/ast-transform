@@ -5,6 +5,8 @@
 
 ASTTransform is an Abstract Syntax Tree (AST) transformation framework. It hooks into the compilation process and allows to perform AST transformations using an annotation: `transform!`.
 
+Transformed code is emitted **line-aligned**: every statement carrying a source location is placed on its original source line. Backtraces, failure messages, `break file:line` breakpoints, and debugger display are therefore correct by construction — no source maps, no backtrace filtering, no debugger integration required.
+
 ## Installation
 
 Add this line to your application's Gemfile:
@@ -159,6 +161,44 @@ In the above, `node#updated` allows updating the node, either its type or its ch
 #### Processing on certain types of nodes only
 
 The [ast gem](https://github.com/whitequark/ast) uses a pattern in which a Transformation may implement a method matching a node type, i.e. `on_class`, `on_send`, `on_lvar`, etc... This is very useful when transformations should process all nodes of this type.
+
+### Line-aligned emission and the authoring contract
+
+ASTTransform owns text and lines; transform authors own semantics and execution order. The contract:
+
+* A node **with** a source location is emitted at that location's line (the emitter pads with blank lines to reach it, and packs with `;` when a line is already occupied).
+* A node **without** a source location is synthetic: it packs onto the current line and inherits its neighbors' line number.
+* Textual order is source order. If your transform needs code to *execute* in a different order than it *appears*, use the deferral facility below instead of moving nodes.
+
+`ASTTransform::TransformationHelper` (included by `AbstractTransformation`) provides the authoring toolkit:
+
+* `s(type, *children)` — builds a loc-less (synthetic) node. Registered custom types (see below) construct their registered class.
+* `s_at(anchor, type, *children)` — builds a node anchored at `anchor`'s source location, so it is emitted at `anchor`'s line. Raises `MissingLocationError` if the anchor has no location.
+* `defer(*statements)` — wraps statements for deferred execution. Returns a `Deferral` with two marker nodes: `placement` (splice where the statements *appear* — lowered to a hidden lambda) and `execution` (splice or compose where they must *run* — lowered to the lambda call). Raises `NonDeferrableError` if a statement contains control flow (`return`, `break`, ...) that would re-bind to the lambda. Unmatched markers fail emission with `UnmatchedDeferralError`.
+* `run_after(statements, run:, after:)` — the paved road over `defer`: returns a reordered copy of `statements` where the contiguous `run` executes after `after`, while remaining at its source position textually. Elements are matched by object identity.
+
+#### Custom node types (intermediate representation)
+
+Transformations that parse a DSL can build their own IR by registering node classes:
+
+```ruby
+class InteractionNode < ASTTransform::Node
+  register :my_interaction
+
+  def cardinality = children[0]
+end
+
+s(:my_interaction, ...) # => InteractionNode, with domain accessors
+```
+
+Custom node types are IR **between stages that understand them** — the stage that owns a type must lower it to plain Ruby nodes before emission. The emitter enforces this: any registered or `ast_`-prefixed type reaching emission raises `UnloweredNodeTypeError`.
+
+#### Testing your transformation
+
+`require 'ast_transform/test_helpers'` (test-only) provides:
+
+* `assert_line_aligned(source, *transformations)` — transforms `source` through the real pipeline and asserts every surviving statement is emitted at its source line.
+* `assert_backtrace_lines(source, path:, raise_at:)` — compiles and executes `source`, asserting the raw first backtrace frame cites `path:raise_at` with no filtering.
 
 ### Parameterizable transformations
 
