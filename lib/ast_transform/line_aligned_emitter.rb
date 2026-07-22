@@ -190,7 +190,7 @@ module ASTTransform
     end
 
     def container_delimiters(node)
-      rendered = Unparser.unparse(empty_container(node)).split("\n").reject(&:empty?)
+      rendered = unparse(empty_container(node)).split("\n").reject(&:empty?)
       opener = rendered[0..-2].join("\n")
       closer = rendered.last
 
