@@ -39,11 +39,11 @@ module ASTTransform
     #
     # @param source [String] The input source code to be transformed.
     #
-    # @return [String] The transformed code.
+    # @return [String] The transformed code, line-aligned (see #transform_file_source).
     def transform(source)
       ast = build_ast(source)
       transformed_ast = transform_ast(ast)
-      Unparser.unparse(transformed_ast)
+      LineAlignedEmitter.new(transformed_ast, 'tmp').emit
     end
 
     # Transforms the give +file_path+.
