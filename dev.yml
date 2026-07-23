@@ -1,4 +1,5 @@
 name: ast_transform
+ruby: "4.0.6"
 commands:
   up:
     desc: Install gems
@@ -6,6 +7,3 @@ commands:
   test:
     desc: Run this repo's tests
     run: bundle exec rake test
-  style:
-    desc: Run RuboCop
-    run: bundle exec rubocop
