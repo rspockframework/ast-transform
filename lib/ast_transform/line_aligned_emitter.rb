@@ -31,13 +31,14 @@ module ASTTransform
   class LineAlignedEmitter
     # Containers the emitter recurses into so nested statements align; every
     # other node renders as an Unparser blob at its head line.
-    RECURSIVE_CONTAINER_TYPES = [:class, :module, :sclass, :def, :defs, :block, :numblock, :kwbegin].freeze
+    RECURSIVE_CONTAINER_TYPES = [:class, :module, :sclass, :def, :defs, :block, :numblock, :itblock, :kwbegin].freeze
     BODY_INDEXES = {
-      class: 2, module: 1, sclass: 1, def: 2, defs: 3, block: 2, numblock: 2
+      class: 2, module: 1, sclass: 1, def: 2, defs: 3, block: 2, numblock: 2, itblock: 2
     }.freeze
-    # Assignments whose value is a block (e.g. the lowered deferral lambda)
+    # Assignments whose value is a block (e.g. the lowered deferral proc)
     # recurse into the block so its body statements align.
     ASSIGNMENT_TYPES = [:lvasgn, :ivasgn, :gvasgn, :casgn].freeze
+    BLOCK_VALUE_TYPES = [:block, :numblock, :itblock].freeze
 
     # @param ast [Parser::AST::Node] transformed AST
     # @param source_path [String] original file path (for error messages)
@@ -177,7 +178,7 @@ module ASTTransform
 
     def block_assignment?(node)
       ASSIGNMENT_TYPES.include?(node.type) && node.children.last.is_a?(::Parser::AST::Node) &&
-        [:block, :numblock].include?(node.children.last.type)
+        BLOCK_VALUE_TYPES.include?(node.children.last.type)
     end
 
     # Renders a container's opener and closer from the node with its body
@@ -232,10 +233,16 @@ module ASTTransform
       loc.end.line if loc.respond_to?(:end) && loc.end
     end
 
+    # Loc-less :begin nodes in statement position (e.g. a lowered deferral
+    # placement carrying its pre-declarations) are grouping, not structure:
+    # flatten them so each inner statement is laid out independently.
     def statements_of(body)
       return [] if body.nil?
+      return [body] unless body.type == :begin
 
-      body.type == :begin ? body.children : [body]
+      body.children.flat_map do |child|
+        child.is_a?(::Parser::AST::Node) && child.type == :begin && child.loc.nil? ? statements_of(child) : [child]
+      end
     end
 
     # Places +render+ at +target_line+ when the cursor hasn't passed it;

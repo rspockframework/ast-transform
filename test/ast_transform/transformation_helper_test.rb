@@ -65,34 +65,11 @@ module ASTTransform
       assert_match(/\A#<ASTTransform::DeferralToken 0x\h+>\z/, token.inspect)
     end
 
-    test "defer rejects statements containing return" do
-      statement = parse("return 1 if early\n")
-
-      assert_raises(NonDeferrableError) { defer(statement) }
-    end
-
-    test "defer rejects break and next at the deferred scope's level" do
-      assert_raises(NonDeferrableError) { defer(parse("break\n")) }
-      assert_raises(NonDeferrableError) { defer(parse("next\n")) }
-    end
-
-    test "defer allows break and next owned by a nested block" do
-      statement = parse("items.each { |item| next if item.nil? }\n")
-
-      deferral = defer(statement)
-
-      assert_equal :ast_deferred, deferral.placement.type
-    end
-
-    test "defer rejects return inside a nested block (it penetrates to the method)" do
-      statement = parse("items.each { |item| return item }\n")
-
-      assert_raises(NonDeferrableError) { defer(statement) }
-    end
-
-    test "defer allows return absorbed by a nested def or lambda" do
-      assert_equal :ast_deferred, defer(parse("def helper = (return 1)\n")).placement.type
-      assert_equal :ast_deferred, defer(parse("callback = -> { return 1 }\n")).placement.type
+    test "defer imposes no control-flow validation (semantics are the proc lowering's contract)" do
+      # return is transparent through the non-lambda proc; severed jumps keep
+      # Ruby's native behavior (see DeferralLowering / LineAlignedEmitterTest).
+      assert_equal :ast_deferred, defer(parse("return 1 if early\n")).placement.type
+      assert_equal :ast_deferred, defer(parse("break\n")).placement.type
     end
 
     test "run_after replaces the run with a placement and inserts the execution after the anchor" do

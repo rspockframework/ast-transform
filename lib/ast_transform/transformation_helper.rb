@@ -2,7 +2,6 @@
 require 'parser'
 require 'ast_transform/node'
 require 'ast_transform/deferral'
-require 'ast_transform/control_flow_guard'
 require 'ast_transform/errors'
 
 module ASTTransform
@@ -65,18 +64,22 @@ module ASTTransform
       # the SOURCE (inner statements keep their own locs, so the emitter
       # aligns the body even though execution waits) and +execution+ where
       # they run — composable inside expressions, e.g. as an assert_raises
-      # block body. The emitter lowers the pair to a hidden-lvar lambda and
-      # its call (the lambda shares the enclosing method binding, so lvar
-      # assignments propagate out).
+      # block body.
+      #
+      # The emitter lowers the pair to a hidden-lvar proc and its call, with
+      # near-transparent semantics (see DeferralLowering): +return+ still
+      # returns from the enclosing method (non-lambda proc), and locals the
+      # deferred statements assign stay method-scope (pre-declared before the
+      # proc). Jump keywords whose owner lies outside the deferred statements
+      # keep Ruby's native behavior — +break+/+retry+ fail loudly at the
+      # jump's own source line, +next+/+redo+ silently end or restart the
+      # deferred body. Weigh that when choosing what your surface defers.
       #
       # Prefer +run_after+ when both points sit in one statement sequence.
       #
       # @param statements [Array<Parser::AST::Node>] statements to defer
       # @return [ASTTransform::Deferral] the placement/execution marker pair
-      # @raise [NonDeferrableError] if a statement contains control flow that
-      #   would re-bind to the deferral lambda
       def defer(*statements)
-        ControlFlowGuard.new.check!(statements)
         token = DeferralToken.new
         Deferral.new(
           placement: s(:ast_deferred, token, s(:begin, *statements)),
@@ -104,7 +107,6 @@ module ASTTransform
       # @param after [Parser::AST::Node] element of +statements+ (by identity,
       #   not inside +run+) the +run+ statements execute after
       # @return [Array<Parser::AST::Node>] new sequence with markers placed
-      # @raise [NonDeferrableError] per +defer+
       # @raise [ArgumentError] if +run+ is not a contiguous identity-run of
       #   +statements+, or +after+ is not an element (or is inside +run+)
       def run_after(statements, run:, after:)

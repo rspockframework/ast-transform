@@ -4,12 +4,7 @@ module ASTTransform
   # source location does not have one.
   class MissingLocationError < StandardError; end
 
-  # Raised by +defer+ when a deferred statement contains control flow that
-  # would re-bind to the deferral lambda (e.g. +return+), silently changing
-  # the meaning of the user's code.
-  class NonDeferrableError < StandardError; end
-
-  # Raised at emission when deferral markers cannot be reconciled: a
+    # Raised at emission when deferral markers cannot be reconciled: a
   # placement without any execution point, an execution point without a
   # placement (or preceding it), or a duplicate placement.
   class UnmatchedDeferralError < StandardError; end

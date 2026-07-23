@@ -21,20 +21,28 @@ module ASTTransform
       LineAlignedEmitter.new(ast, 'fixture.rb').emit
     end
 
-    test "emits deferral pairs as a hidden-lvar lambda and its call" do
+    # Runs emitted code with real method semantics (return target, method
+    # scope for locals) — exactly the environment deferred code lives in.
+    def run_as_method(emitted)
+      harness = Module.new
+      harness.module_eval("def self.run_case\n#{emitted}\nend", 'fixture.rb', 0)
+      harness.run_case
+    end
+
+    test "emits deferral pairs as a hidden-lvar proc and its call" do
       given, when_statement, interaction = parse("given_setup\nwhen_body\ninteraction_setup\n").children
       reordered = run_after([given, when_statement, interaction], run: [when_statement], after: interaction)
 
       emitted = emit(s(:begin, *reordered))
 
-      assert_includes emitted, '__ast_deferred_1__ = ->', emitted
+      assert_includes emitted, '__ast_deferred_1__ = proc', emitted
       assert_includes emitted, 'when_body', emitted
       assert_includes emitted, '__ast_deferred_1__.call', emitted
-      # Execution order: lambda defined, interaction runs, then the call.
+      # Execution order: proc defined, interaction runs, then the call.
       assert_operator emitted.index('interaction_setup'), :<, emitted.index('__ast_deferred_1__.call'), emitted
     end
 
-    test "deferred body statements stay on their source lines inside the lambda" do
+    test "deferred body statements stay on their source lines inside the proc" do
       source = <<~HEREDOC
         given_setup
         when_body_first
@@ -95,8 +103,8 @@ module ASTTransform
         first_deferral.placement, second_deferral.placement,
         first_deferral.execution, second_deferral.execution))
 
-      assert_includes emitted, '__ast_deferred_1__ = ->', emitted
-      assert_includes emitted, '__ast_deferred_2__ = ->', emitted
+      assert_includes emitted, '__ast_deferred_1__ = proc', emitted
+      assert_includes emitted, '__ast_deferred_2__ = proc', emitted
     end
 
     test "an unlowered custom node type raises UnloweredNodeTypeError" do
@@ -147,6 +155,110 @@ module ASTTransform
       # directly: layout must fall back, never raise, whatever future
       # Unparser output looks like.
       assert_nil emitter.send(:compress_to_single_line, "value = <<~TXT\n  hi\nTXT")
+    end
+
+    test "pre-declares locals the deferred statements assign at method scope" do
+      first, second, third = parse("given_setup\nresult = compute\ninteraction_setup\n").children
+      reordered = run_after([first, second, third], run: [second], after: third)
+
+      emitted = emit(s(:begin, *reordered))
+
+      assert_includes emitted, 'result = result; __ast_deferred_1__ = proc', emitted
+    end
+
+    test "pre-declarations skip block-local assignments but cover the block call's arguments" do
+      source = <<~HEREDOC
+        outer = items.map { |item| inner = item }
+        buffer.take(width = limit) { |line| sink(line) }
+      HEREDOC
+      deferral = defer(*parse(source).children)
+
+      emitted = emit(s(:begin, deferral.placement, deferral.execution))
+
+      assert_includes emitted, 'outer = outer', emitted
+      # width is assigned in the block call's ARGUMENTS, which evaluate at
+      # method scope; inner is first assigned inside the block, so it is
+      # block-local in the original source too.
+      assert_includes emitted, 'width = width', emitted
+      refute_includes emitted, 'inner = inner', emitted
+    end
+
+    test "pre-declarations skip assignments inside nested defs" do
+      deferral = defer(parse("def helper = (scoped = 1)\n"))
+
+      emitted = emit(s(:begin, deferral.placement, deferral.execution))
+
+      refute_includes emitted, 'scoped = scoped', emitted
+    end
+
+    test "a deferred assignment runs late but propagates to the enclosing method scope" do
+      source = <<~HEREDOC
+        log = []
+        result = log.size
+        log << :setup
+        [log, result]
+      HEREDOC
+      first, second, third, fourth = parse(source).children
+      reordered = run_after([first, second, third, fourth], run: [second], after: third)
+
+      # Deferred `result = log.size` runs after `log << :setup`, so result is
+      # 1 (textual order would give 0) — proving both the reordering and that
+      # the assignment escaped the proc into the method scope.
+      assert_equal [[:setup], 1], run_as_method(emit(s(:begin, *reordered)))
+    end
+
+    test "a pre-declaration does not clobber an already-assigned local" do
+      source = <<~HEREDOC
+        value = :given
+        value = :reassigned
+        snapshot = value
+        [snapshot, value]
+      HEREDOC
+      first, second, third, fourth = parse(source).children
+      reordered = run_after([first, second, third, fourth], run: [second], after: third)
+
+      # snapshot reads value between the proc's definition and its call: the
+      # pre-declaration must preserve :given, and the deferred reassignment
+      # must land afterwards.
+      assert_equal [:given, :reassigned], run_as_method(emit(s(:begin, *reordered)))
+    end
+
+    test "a deferred return exits the enclosing method (non-lambda proc semantics)" do
+      source = <<~HEREDOC
+        log = []
+        return [:early, log] unless log.empty?
+        log << :setup
+        :late
+      HEREDOC
+      first, second, third, fourth = parse(source).children
+      reordered = run_after([first, second, third, fourth], run: [second], after: third)
+
+      # The deferred return fires from inside the proc but returns from the
+      # method — and only after the setup it was deferred past has run.
+      assert_equal [:early, [:setup]], run_as_method(emit(s(:begin, *reordered)))
+    end
+
+    test "a deferred break severed from its loop keeps Ruby's native LocalJumpError" do
+      deferral = defer(parse("break\n"))
+
+      emitted = emit(s(:begin, deferral.placement, deferral.execution))
+
+      assert_raises(LocalJumpError) { run_as_method(emitted) }
+    end
+
+    test "statements inside an it-block container stay on their source lines" do
+      source = <<~HEREDOC
+        items.each do
+          first_call(it)
+
+          second_call(it)
+        end
+      HEREDOC
+
+      emitted_lines = emit(parse(source)).lines.map(&:strip)
+
+      assert_equal 2, emitted_lines.index { |line| line.include?('first_call') } + 1, emitted_lines.join
+      assert_equal 4, emitted_lines.index { |line| line.include?('second_call') } + 1, emitted_lines.join
     end
 
     test "execution markers compose inside expressions" do

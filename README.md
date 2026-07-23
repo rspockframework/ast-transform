@@ -174,8 +174,14 @@ ASTTransform owns text and lines; transform authors own semantics and execution 
 
 * `s(type, *children)` — builds a loc-less (synthetic) node. Registered custom types (see below) construct their registered class.
 * `s_at(anchor, type, *children)` — builds a node anchored at `anchor`'s source location, so it is emitted at `anchor`'s line. Raises `MissingLocationError` if the anchor has no location.
-* `defer(*statements)` — wraps statements for deferred execution. Returns a `Deferral` with two marker nodes: `placement` (splice where the statements *appear* — lowered to a hidden lambda) and `execution` (splice or compose where they must *run* — lowered to the lambda call). Raises `NonDeferrableError` if a statement contains control flow (`return`, `break`, ...) that would re-bind to the lambda. Unmatched markers fail emission with `UnmatchedDeferralError`.
+* `defer(*statements)` — wraps statements for deferred execution. Returns a `Deferral` with two marker nodes: `placement` (splice where the statements *appear* — lowered to a hidden proc) and `execution` (splice or compose where they must *run* — lowered to the proc's call). Unmatched markers fail emission with `UnmatchedDeferralError`.
 * `run_after(statements, run:, after:)` — the paved road over `defer`: returns a reordered copy of `statements` where the contiguous `run` executes after `after`, while remaining at its source position textually. Elements are matched by object identity.
+
+Deferred statements keep their original meaning as far as Ruby's closure semantics allow:
+
+* `return` still returns from the enclosing method — the hidden closure is a non-lambda proc, and placement and execution always share one method activation.
+* Locals assigned by the deferred statements stay method-scope: the lowering pre-declares each one (`result = result`) before the proc, so code after the execution point can read them. Before the deferred code runs they are `nil` — exactly what an unexecuted assignment yields.
+* Jump keywords whose owner lies *outside* the deferred statements keep Ruby's native behavior: `break`/`retry` raise `LocalJumpError` at the jump's own source line, while `next`/`redo` silently end or restart the deferred body. ASTTransform does not validate this — what a transform surface allows users to defer is the transform author's call.
 
 #### Gotcha: location-only rewrites are silently dropped
 

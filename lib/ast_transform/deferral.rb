@@ -9,14 +9,15 @@ module ASTTransform
   #
   # placement:: (:ast_deferred, token, (:begin, ...)) — the deferred body,
   #             spliced at the statements' SOURCE position; lowered to
-  #             +__ast_deferred_<n>__ = -> { ... }+.
+  #             +__ast_deferred_<n>__ = proc { ... }+ (plus pre-declarations
+  #             for the locals the body assigns — see DeferralLowering).
   # execution:: (:ast_deferred_call, token) — loc-less, spliced (or composed
   #             into an expression, e.g. an assert_raises block body) at the
   #             execution point; lowered to +__ast_deferred_<n>__.call+.
   Deferral = Data.define(:placement, :execution)
 
   # The pairing mechanism between the two halves of a Deferral: it answers
-  # "which lambda does this call marker invoke?" when a scope holds several
+  # "which proc does this call marker invoke?" when a scope holds several
   # deferrals. The markers cannot reference each other's nodes — Processor and
   # Node#updated rebuilds create new node objects, so node identity does not
   # survive transformation passes. Children DO survive (carried by reference
