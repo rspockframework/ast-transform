@@ -33,6 +33,27 @@ module ASTTransform
       assert_line_aligned(ALIGNED_SOURCE)
     end
 
+    # Reorders statements textually instead of deferring execution — exactly
+    # the contract violation assert_line_aligned exists to catch: the moved
+    # statement can no longer be emitted at its source line.
+    class StatementSwappingTransformation < ASTTransform::AbstractTransformation
+      private
+
+      def process_node(node)
+        return method(:process).super_method.call(node) unless node.type == :begin
+
+        node.updated(nil, node.children.reverse)
+      end
+    end
+
+    test "assert_line_aligned reports each misaligned statement" do
+      error = assert_raises(Minitest::Assertion) do
+        assert_line_aligned(ALIGNED_SOURCE, StatementSwappingTransformation.new)
+      end
+
+      assert_includes error.message, 'MISALIGNED first_call: source line 1, emitted line 3'
+    end
+
     test "assert_backtrace_lines passes when the raise cites its source line" do
       source = <<~HEREDOC
         value = 1

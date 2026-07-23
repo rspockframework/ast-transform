@@ -107,6 +107,48 @@ module ASTTransform
       assert_includes error.message, 'ast_transform_emitter_test_custom'
     end
 
+    test "rescue/else/ensure keywords and their statements emit at their source lines" do
+      source = <<~HEREDOC
+        def risky
+          compute
+        rescue ArgumentError, TypeError => error
+          handle(error)
+        else
+          celebrate
+        ensure
+          cleanup
+        end
+      HEREDOC
+
+      emitted_lines = emit(parse(source)).lines.map(&:strip)
+
+      assert_equal ['def risky', 'compute', 'rescue ArgumentError, TypeError => error', 'handle(error)',
+        'else', 'celebrate', 'ensure', 'cleanup', 'end'], emitted_lines
+    end
+
+    test "a standalone begin/end block emits its statements at their source lines" do
+      source = <<~HEREDOC
+        begin
+          first_call
+          second_call
+        end
+      HEREDOC
+
+      emitted_lines = emit(parse(source)).lines.map(&:strip)
+
+      assert_equal ['begin', 'first_call', 'second_call', 'end'], emitted_lines
+    end
+
+    test "compress_to_single_line declines renders whose single-line join does not parse" do
+      emitter = LineAlignedEmitter.new(parse("noop\n"), 'fixture.rb')
+
+      # No current Unparser render joins into invalid syntax (heredocs are
+      # normalized to inline strings), so exercise the totality guard
+      # directly: layout must fall back, never raise, whatever future
+      # Unparser output looks like.
+      assert_nil emitter.send(:compress_to_single_line, "value = <<~TXT\n  hi\nTXT")
+    end
+
     test "execution markers compose inside expressions" do
       when_body = parse("raise_helper\n")
       deferral = defer(when_body)

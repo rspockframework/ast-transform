@@ -59,6 +59,12 @@ module ASTTransform
       assert_instance_of DeferralToken, deferral.placement.children[0]
     end
 
+    test "DeferralToken#inspect names the class so AST dumps are self-documenting" do
+      token = defer(parse("foo\n")).placement.children[0]
+
+      assert_match(/\A#<ASTTransform::DeferralToken 0x\h+>\z/, token.inspect)
+    end
+
     test "defer rejects statements containing return" do
       statement = parse("return 1 if early\n")
 

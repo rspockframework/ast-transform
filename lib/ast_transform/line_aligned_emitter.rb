@@ -233,11 +233,9 @@ module ASTTransform
     end
 
     def statements_of(body)
-      case body
-      when nil then []
-      when ::Parser::AST::Node then body.type == :begin ? body.children : [body]
-      else [body]
-      end
+      return [] if body.nil?
+
+      body.type == :begin ? body.children : [body]
     end
 
     # Places +render+ at +target_line+ when the cursor hasn't passed it;
@@ -256,11 +254,11 @@ module ASTTransform
       @lines.concat(rest)
     end
 
+    # The last line is never blank here: padding blanks are only created
+    # inside +place+, which immediately overwrites the padded line.
     def pack(text)
       if @lines.empty?
         @lines << text
-      elsif @lines.last.empty?
-        @lines[-1] = text
       else
         @lines[-1] = "#{@lines.last}; #{text}"
       end
