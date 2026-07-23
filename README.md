@@ -177,6 +177,10 @@ ASTTransform owns text and lines; transform authors own semantics and execution 
 * `defer(*statements)` — wraps statements for deferred execution. Returns a `Deferral` with two marker nodes: `placement` (splice where the statements *appear* — lowered to a hidden lambda) and `execution` (splice or compose where they must *run* — lowered to the lambda call). Raises `NonDeferrableError` if a statement contains control flow (`return`, `break`, ...) that would re-bind to the lambda. Unmatched markers fail emission with `UnmatchedDeferralError`.
 * `run_after(statements, run:, after:)` — the paved road over `defer`: returns a reordered copy of `statements` where the contiguous `run` executes after `after`, while remaining at its source position textually. Elements are matched by object identity.
 
+#### Gotcha: location-only rewrites are silently dropped
+
+`Parser::AST::Node#updated` returns `self` when the new children compare `==` to the old ones — and `AST::Node#==` ignores source locations. A `Processor` pass that replaces a node with an equal-valued one (e.g. the same call rebuilt loc-less, hoping to change its emitted line) is a no-op: every `node.updated(nil, process_all(node))` up the tree discards the replacement. Location is part of a node's *emission*, not its *value* — to change where a node emits, change what it is (`s_at` an anchored rebuild with different children), or restructure the parent explicitly rather than relying on `updated`.
+
 #### Custom node types (intermediate representation)
 
 Transformations that parse a DSL can build their own IR by registering node classes:
