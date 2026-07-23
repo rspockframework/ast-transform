@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
   spec.bindir        = "exe"
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
-  spec.required_ruby_version = ">= 3.2"
+  spec.required_ruby_version = '>= 3.3'
 
   # Development dependencies
   spec.add_development_dependency("bundler", ">= 2.1")
@@ -33,7 +33,11 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency("simplecov", "~> 0.22")
 
   # Runtime dependencies
-  spec.add_runtime_dependency("parser", ">= 3.0")
-  spec.add_runtime_dependency("prism", ">= 1.5")
-  spec.add_runtime_dependency("unparser", ">= 0.6")
+  # parser provides the runtime AST vocabulary (Parser::AST::Node/Processor,
+  # Source::Buffer/Map); parsing itself goes through prism's translation layer.
+  spec.add_runtime_dependency "parser", ">= 3.3"
+  spec.add_runtime_dependency "prism", ">= 1.5"
+  # unparser >= 0.8: static_local_variables: (0.7 interface) + the prism-based
+  # round-trip verification parser required for Ruby >= 3.4 syntax.
+  spec.add_runtime_dependency "unparser", ">= 0.8"
 end

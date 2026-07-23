@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Breaking:** `Transformer#transform` and `#transform_file_source` emit line-aligned output (source-anchored layout, always newline-terminated) instead of Unparser's re-normalized formatting.
+- **Breaking:** requires Ruby >= 3.3 (3.2 is EOL since March 2026).
+- Dependency floors now reflect reality: `unparser >= 0.8` (the emitter uses `static_local_variables:`, a 0.7 interface, and 0.8's prism-based round-trip verification is required for Ruby >= 3.4 syntax) and `parser >= 3.3` (unparser's own floor; the declared `>= 3.0` could never resolve lower).
 
 ## [0.1.4] 2019-06-20
 ### Fixed
