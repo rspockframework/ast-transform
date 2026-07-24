@@ -126,7 +126,7 @@ module ASTTransform
 
         class PrefixFoo
 
-        foo
+          foo
 
         end
       HEREDOC
@@ -146,8 +146,8 @@ module ASTTransform
       expected = <<~HEREDOC
 
         class PrefixFoo
-        class Bar
-        end
+          class Bar
+          end
         end
       HEREDOC
 
@@ -209,9 +209,9 @@ module ASTTransform
       expected = <<~HEREDOC
 
         class PrefixFoo
-        def setup
-        @obj = MyClass.new(bar: 1, baz: 2)
-        end
+          def setup
+            @obj = MyClass.new(bar: 1, baz: 2)
+          end
         end
       HEREDOC
 
@@ -231,9 +231,9 @@ module ASTTransform
       expected = <<~HEREDOC
 
         class PrefixFoo
-        def call
-        method("hello", bar: 1)
-        end
+          def call
+            method("hello", bar: 1)
+          end
         end
       HEREDOC
 

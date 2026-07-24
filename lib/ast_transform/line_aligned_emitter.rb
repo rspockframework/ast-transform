@@ -13,7 +13,7 @@ module ASTTransform
   # Cursor algorithm over statement sequences:
   #
   # 1. Statement has loc and target_line > cursor: pad with newlines, emit at
-  #    the target line.
+  #    the target line, indented to the statement's source column.
   # 2. Statement has loc and target_line <= cursor: pack (`; `) onto the
   #    current line. A user statement landing here means the transform moved
   #    it — the alignment auditor's concern, not a runtime failure.
@@ -71,7 +71,7 @@ module ASTTransform
       if recursive_container?(node)
         emit_container(node)
       else
-        place(node.loc&.line, aligned_render(node))
+        place(node.loc&.line, aligned_render(node), column: node.loc&.column)
       end
     end
 
@@ -134,7 +134,7 @@ module ASTTransform
     def emit_ensure(node)
       *body, ensurer = node.children
       body.each { |statement| emit_body(statement) }
-      place_keyword(keyword_line(node), 'ensure')
+      place_keyword(keyword_line(node), 'ensure', column: keyword_column(node))
       emit_statements(statements_of(ensurer))
     end
 
@@ -144,7 +144,8 @@ module ASTTransform
       resbodies.each { |resbody| emit_resbody(resbody) }
       return if else_body.nil?
 
-      place_keyword(nil, 'else')
+      else_range = node.loc.else if node.loc.respond_to?(:else)
+      place_keyword(else_range&.line, 'else', column: else_range&.column)
       emit_statements(statements_of(else_body))
     end
 
@@ -153,15 +154,15 @@ module ASTTransform
       header = ['rescue']
       header << " #{Unparser.unparse(exceptions).delete_prefix('[').delete_suffix(']')}" if exceptions
       header << " => #{capture.children[0]}" if capture
-      place_keyword(node.loc&.line, header.join)
+      place_keyword(node.loc&.line, header.join, column: node.loc&.column)
       emit_statements(statements_of(body))
     end
 
     # Keywords (rescue/ensure/else) cannot be `;`-packed after a statement;
     # when their line is taken they go on a fresh line instead.
-    def place_keyword(target_line, keyword)
+    def place_keyword(target_line, keyword, column: nil)
       if target_line && target_line > @lines.size
-        place(target_line, keyword)
+        place(target_line, keyword, column: column)
       else
         @lines << keyword
       end
@@ -170,6 +171,11 @@ module ASTTransform
     def keyword_line(node)
       loc = node.loc
       loc.keyword.line if loc.respond_to?(:keyword) && loc.keyword
+    end
+
+    def keyword_column(node)
+      loc = node.loc
+      loc.keyword.column if loc.respond_to?(:keyword) && loc.keyword
     end
 
     def recursive_container?(node)
@@ -185,9 +191,9 @@ module ASTTransform
     # emptied, then recurses into the body so nested statements align.
     def emit_container(node)
       opener, closer = container_delimiters(node)
-      place(node.loc&.line, opener)
+      place(node.loc&.line, opener, column: node.loc&.column)
       emit_body(container_body(node))
-      place(closer_line(node), closer)
+      place(closer_line(node), closer, column: closer_column(node))
     end
 
     def container_delimiters(node)
@@ -233,6 +239,11 @@ module ASTTransform
       loc.end.line if loc.respond_to?(:end) && loc.end
     end
 
+    def closer_column(node)
+      loc = node.loc
+      loc.end.column if loc.respond_to?(:end) && loc.end
+    end
+
     # Loc-less :begin nodes in statement position (e.g. a lowered thunk in a
     # single-statement container body, carried with its placement) are
     # grouping, not structure: flatten them so each inner statement is laid
@@ -248,18 +259,28 @@ module ASTTransform
 
     # Places +render+ at +target_line+ when the cursor hasn't passed it;
     # otherwise packs onto the current line. Multi-line renders advance the
-    # cursor by their height.
-    def place(target_line, render)
+    # cursor by their height. When opening a fresh line, the render is
+    # indented to the statement's source +column+ — cosmetic only (leading
+    # whitespace is never significant in emitted code; heredocs are
+    # normalized to inline strings), but it keeps the artifact and test
+    # expectations visually close to the source. Packed statements ignore
+    # the column, as do an Unparser render's continuation lines (they keep
+    # Unparser's own relative indentation).
+    def place(target_line, render, column: nil)
       first, *rest = render.split("\n")
 
       if target_line && target_line > @lines.size
         @lines << '' while @lines.size < target_line
-        @lines[-1] = first
+        @lines[-1] = indented(first, column)
       else
         pack(first)
       end
 
       @lines.concat(rest)
+    end
+
+    def indented(text, column)
+      column && column.positive? ? "#{' ' * column}#{text}" : text
     end
 
     # The last line is never blank here: padding blanks are only created
