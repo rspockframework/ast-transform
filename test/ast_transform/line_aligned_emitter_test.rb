@@ -36,11 +36,13 @@ module ASTTransform
 
       emitted = emit(s(:begin, *reordered))
 
-      assert_includes emitted, '__ast_thunk_1__ = proc', emitted
-      assert_includes emitted, 'when_body', emitted
-      assert_includes emitted, '__ast_thunk_1__.call', emitted
-      # Execution order: proc defined, interaction runs, then the call.
-      assert_operator emitted.index('interaction_setup'), :<, emitted.index('__ast_thunk_1__.call'), emitted
+      # when_body stays on its source line (2) inside the proc; execution order is proc definition, interaction,
+      # then the call.
+      assert_equal <<~RUBY, emitted
+        given_setup; __ast_thunk_1__ = proc do
+        when_body; end
+        interaction_setup; __ast_thunk_1__.call
+      RUBY
     end
 
     test "thunk body statements stay on their source lines inside the proc" do
@@ -55,8 +57,12 @@ module ASTTransform
 
       emitted = emit(s(:begin, *reordered))
 
-      assert_equal 2, emitted.lines.index { |line| line.include?('when_body_first') } + 1, emitted
-      assert_equal 3, emitted.lines.index { |line| line.include?('when_body_second') } + 1, emitted
+      assert_equal <<~RUBY, emitted
+        given_setup; __ast_thunk_1__ = proc do
+        when_body_first
+        when_body_second; end
+        interaction_setup; __ast_thunk_1__.call
+      RUBY
     end
 
     test "reusing one thunk node executes its body from multiple call sites (multiplexing)" do
@@ -64,8 +70,10 @@ module ASTTransform
 
       emitted = emit(s(:begin, shared, shared))
 
-      assert_equal 1, emitted.scan('__ast_thunk_1__ = proc').size, emitted
-      assert_equal 2, emitted.scan('__ast_thunk_1__.call').size, emitted
+      # One proc, one call per occurrence — all packed onto the body's single source line.
+      assert_equal <<~RUBY, emitted
+        __ast_thunk_1__ = proc do; shared_body; end; __ast_thunk_1__.call; __ast_thunk_1__.call
+      RUBY
     end
 
     test "a thunk whose body lines fall after its execution point raises ThunkLowering::PlacementError" do
@@ -93,8 +101,9 @@ module ASTTransform
 
       emitted = emit(s(:begin, parse("real_statement\n"), synthetic))
 
-      assert_includes emitted, 'real_statement; __ast_thunk_1__ = proc', emitted
-      assert_operator emitted.index('synthetic_body'), :<, emitted.index('__ast_thunk_1__.call'), emitted
+      assert_equal <<~RUBY, emitted
+        real_statement; __ast_thunk_1__ = proc do; synthetic_body; end; __ast_thunk_1__.call
+      RUBY
     end
 
     test "distinct thunks get distinct hidden lvar names" do
@@ -103,8 +112,11 @@ module ASTTransform
 
       emitted = emit(s(:begin, first_thunk, second_thunk))
 
-      assert_includes emitted, '__ast_thunk_1__ = proc', emitted
-      assert_includes emitted, '__ast_thunk_2__ = proc', emitted
+      assert_equal(
+        '__ast_thunk_1__ = proc do; first_body; end; __ast_thunk_1__.call; ' \
+          "__ast_thunk_2__ = proc do; second_body; end; __ast_thunk_2__.call\n",
+        emitted
+      )
     end
 
     test "an unlowered custom node type raises LineAlignedEmitter::UnloweredNodeTypeError" do
@@ -128,10 +140,8 @@ module ASTTransform
         end
       HEREDOC
 
-      emitted_lines = emit(parse(source)).lines.map(&:strip)
-
-      assert_equal ['def risky', 'compute', 'rescue ArgumentError, TypeError => error', 'handle(error)',
-        'else', 'celebrate', 'ensure', 'cleanup', 'end'], emitted_lines
+      # Byte-identical to the source: every keyword and statement at its line and column.
+      assert_equal source, emit(parse(source))
     end
 
     # A fully synthetic ensure (e.g. a transform wrapping a body in teardown, like RSpock's Cleanup) has no keyword
@@ -157,9 +167,7 @@ module ASTTransform
         end
       HEREDOC
 
-      emitted_lines = emit(parse(source)).lines.map(&:strip)
-
-      assert_equal ['begin', 'first_call', 'second_call', 'end'], emitted_lines
+      assert_equal source, emit(parse(source))
     end
 
     test "pre-declares locals the thunk body assigns at method scope" do
@@ -168,7 +176,13 @@ module ASTTransform
 
       emitted = emit(s(:begin, *reordered))
 
-      assert_includes emitted, 'result = result; __ast_thunk_1__ = proc', emitted
+      # `result = result` registers the name at method scope before the proc; the thunked assignment stays on its
+      # source line inside it.
+      assert_equal <<~RUBY, emitted
+        given_setup; result = result; __ast_thunk_1__ = proc do
+        result = compute; end
+        interaction_setup; __ast_thunk_1__.call
+      RUBY
     end
 
     test "pre-declarations skip block-local assignments but cover the block call's arguments" do
@@ -179,18 +193,22 @@ module ASTTransform
 
       emitted = emit(s(:begin, thunk(*parse(source).children)))
 
-      assert_includes emitted, 'outer = outer', emitted
-      # width is assigned in the block call's ARGUMENTS, which evaluate at
-      # method scope; inner is first assigned inside the block, so it is
-      # block-local in the original source too.
-      assert_includes emitted, 'width = width', emitted
-      refute_includes emitted, 'inner = inner', emitted
+      # outer and width get pre-declarations: width is assigned in the block call's ARGUMENTS, which evaluate at
+      # method scope. inner does not: it is first assigned inside the block, so it was block-local in the original
+      # source too.
+      assert_equal <<~RUBY, emitted
+        outer = outer; width = width; __ast_thunk_1__ = proc do; outer = items.map { |item,|; inner = item; }
+        buffer.take(width = limit) { |line,|; sink(line); }; end; __ast_thunk_1__.call
+      RUBY
     end
 
     test "pre-declarations skip assignments inside nested defs" do
       emitted = emit(s(:begin, thunk(parse("def helper = (scoped = 1)\n"))))
 
-      refute_includes emitted, 'scoped = scoped', emitted
+      # No `scoped = scoped`: the def opens its own scope, so the assignment was never method-scope.
+      assert_equal <<~RUBY, emitted
+        __ast_thunk_1__ = proc do; def helper; scoped = 1; end; end; __ast_thunk_1__.call
+      RUBY
     end
 
     test "a thunked assignment runs late but propagates to the enclosing method scope" do
@@ -255,10 +273,8 @@ module ASTTransform
         end
       HEREDOC
 
-      emitted_lines = emit(parse(source)).lines.map(&:strip)
-
-      assert_equal 2, emitted_lines.index { |line| line.include?('first_call') } + 1, emitted_lines.join
-      assert_equal 4, emitted_lines.index { |line| line.include?('second_call') } + 1, emitted_lines.join
+      # Byte-identical to the source, blank line included.
+      assert_equal source, emit(parse(source))
     end
 
     test "a thunk composes inside expressions; its placement hoists to the enclosing sequence" do
@@ -270,11 +286,10 @@ module ASTTransform
 
       emitted = emit(s(:begin, assert_raises_call))
 
-      assert_includes emitted, '__ast_thunk_1__ = proc', emitted
-      assert_includes emitted, 'assert_raises(RuntimeError)', emitted
-      assert_includes emitted, '__ast_thunk_1__.call', emitted
       # The proc's definition precedes the assert_raises call that runs it.
-      assert_operator emitted.index('__ast_thunk_1__ = proc'), :<, emitted.index('assert_raises'), emitted
+      assert_equal <<~RUBY, emitted
+        __ast_thunk_1__ = proc do; raise_helper; end; assert_raises(RuntimeError) do; __ast_thunk_1__.call; end
+      RUBY
     end
 
     test "a thunk inside a def stays inside the def (scope boundary)" do
@@ -284,11 +299,12 @@ module ASTTransform
 
       emitted = emit(thunked_def)
 
-      # The proc and its call both sit between the def opener and its end;
-      # the body statement keeps its source line.
-      assert_operator emitted.index('def run'), :<, emitted.index('__ast_thunk_1__ = proc'), emitted
-      assert_operator emitted.index('__ast_thunk_1__.call'), :<, emitted.rindex('end'), emitted
-      assert_equal 2, emitted.lines.index { |line| line.include?('helper') } + 1, emitted
+      # The proc and its call both sit between the def opener and its end; the body statement keeps its source line.
+      assert_equal <<~RUBY, emitted
+        def run; __ast_thunk_1__ = proc do
+          helper; end; __ast_thunk_1__.call
+        end
+      RUBY
     end
   end
 end
