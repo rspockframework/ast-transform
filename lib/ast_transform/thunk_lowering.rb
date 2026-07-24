@@ -6,50 +6,40 @@ require 'ast_transform/errors'
 require 'ast_transform/transformation_helper'
 
 module ASTTransform
-  # Lowers Thunk nodes into plain Ruby ahead of emission. Each unique thunk
-  # (grouped by token identity) becomes a hidden proc; each occurrence
-  # becomes the proc's call:
+  # Lowers Thunk nodes into plain Ruby ahead of emission. Each unique thunk (grouped by token identity) becomes a
+  # hidden proc; each occurrence becomes the proc's call:
   #
   #   thunk placed at the execution point
   #     => x = x; __ast_thunk_<n>__ = proc { body }   (at the body's source lines)
   #        ...
   #        __ast_thunk_<n>__.call                     (at the occurrence)
   #
-  # Placement is inferred, not authored: the proc's text is inserted into
-  # the statement sequence enclosing the occurrence, positioned among its
-  # siblings by the body's first source line — the lines the author removed
-  # the statements from. A loc-less body has no textual home and packs
-  # immediately before its call. Placements never escape a scope boundary
-  # (def/class/module bodies absorb their own), because the hidden lvar must
-  # share the call's method activation; they DO escape block literals, which
-  # close over the defining scope.
+  # Placement is inferred, not authored: the proc's text is inserted into the statement sequence enclosing the
+  # occurrence, positioned among its siblings by the body's first source line — the lines the author removed the
+  # statements from. A loc-less body has no textual home and packs immediately before its call. Placements never
+  # escape a scope boundary (def/class/module bodies absorb their own), because the hidden lvar must share the call's
+  # method activation; they DO escape block literals, which close over the defining scope.
   #
-  # The closure is a non-lambda proc on purpose: `return` inside a proc
-  # returns from the method where the proc was defined, and placement and
-  # execution always share one method activation, so a thunked `return`
-  # keeps its original meaning. Jump keywords whose owner lies outside the
-  # body keep Ruby's native behavior (`break`/`retry` fail loudly,
-  # `next`/`redo` silently alter flow) — what a transform chooses to thunk
-  # is the transform author's call.
+  # The closure is a non-lambda proc on purpose: `return` inside a proc returns from the method where the proc was
+  # defined, and placement and execution always share one method activation, so a thunked `return` keeps its original
+  # meaning. Jump keywords whose owner lies outside the body keep Ruby's native behavior (`break`/`retry` fail loudly,
+  # `next`/`redo` silently alter flow) — what a transform chooses to thunk is the transform author's call.
   #
-  # The `x = x` pre-declarations cover every local the body assigns at
-  # method scope. A local first assigned inside a block literal is
-  # block-local, so without a textual method-scope assignment before the
-  # proc, thunked assignments would be invisible to the statements that
-  # read them after the execution point. Self-assignment registers the name
-  # (nil until the thunk runs — exactly what an unexecuted assignment
-  # yields) without clobbering an already-assigned value.
+  # The `x = x` pre-declarations cover every local the body assigns at method scope. A local first assigned inside a
+  # block literal is block-local, so without a textual method-scope assignment before the proc, thunked assignments
+  # would be invisible to the statements that read them after the execution point. Self-assignment registers the name
+  # (nil until the thunk runs — exactly what an unexecuted assignment yields) without clobbering an already-assigned
+  # value.
   class ThunkLowering
     include TransformationHelper
 
-    # A pending proc definition: +line+ is the body's first source line
-    # (nil for fully synthetic bodies), +statements+ the pre-declarations
-    # plus the proc assignment.
+    # A pending proc definition: +line+ is the body's first source line (nil for fully synthetic bodies),
+    # +statements+ the pre-declarations plus the proc assignment.
     Placement = Struct.new(:line, :statements)
 
     SEQUENCE_TYPES = [:begin, :kwbegin].freeze
-    # Scope-opening containers: the hidden lvar cannot be referenced across
-    # these boundaries, so placements arising inside must land inside.
+    # Scope-opening containers: the hidden lvar cannot be referenced across these boundaries, so placements arising
+    # inside must land inside.
     SCOPE_BODY_INDEXES = { def: 2, defs: 3, class: 2, module: 1, sclass: 1 }.freeze
 
     def initialize
@@ -59,16 +49,16 @@ module ASTTransform
 
     # @param node [Parser::AST::Node] tree possibly containing Thunk nodes
     # @return [Parser::AST::Node] tree with thunks lowered to plain Ruby
-    # @raise [ThunkPlacementError] when a thunk body's source lines fall
-    #   after its execution point, or occurrences of one thunk diverge
+    # @raise [ThunkPlacementError] when a thunk body's source lines fall after its execution point, or occurrences of
+    #   one thunk diverge
     def run(node)
       lower_body(node)
     end
 
     private
 
-    # Lowers a node standing in statement-body position (a container's body
-    # or the root), absorbing any placements that arise within it.
+    # Lowers a node standing in statement-body position (a container's body or the root), absorbing any placements
+    # that arise within it.
     def lower_body(node)
       return node unless node.is_a?(::Parser::AST::Node)
       return lower_sequence(node) if SEQUENCE_TYPES.include?(node.type)
@@ -76,13 +66,11 @@ module ASTTransform
       lowered, placements = lower_expression(node)
       return lowered if placements.empty?
 
-      # A loc-less :begin in statement position; the emitter flattens it
-      # into the surrounding statement stream.
+      # A loc-less :begin in statement position; the emitter flattens it into the surrounding statement stream.
       s(:begin, *placements.flat_map(&:statements), lowered)
     end
 
-    # Lowers a statement sequence, inserting each placement among the
-    # statements by the body's source line.
+    # Lowers a statement sequence, inserting each placement among the statements by the body's source line.
     def lower_sequence(node)
       statements = []
 
@@ -98,9 +86,8 @@ module ASTTransform
       node.updated(nil, statements)
     end
 
-    # Lowers a node in expression position. Returns the lowered node and the
-    # placements that must be inserted into the enclosing statement
-    # sequence.
+    # Lowers a node in expression position. Returns the lowered node and the placements that must be inserted into
+    # the enclosing statement sequence.
     #
     # @return [Array(Parser::AST::Node, Array<Placement>)]
     def lower_expression(node)
@@ -138,8 +125,8 @@ module ASTTransform
       [node.updated(nil, children), pending]
     end
 
-    # An occurrence of a thunk: the first occurrence of its token yields the
-    # placement; every occurrence yields the call.
+    # An occurrence of a thunk: the first occurrence of its token yields the placement; every occurrence yields the
+    # call.
     def lower_thunk(node)
       token = node.token
 
@@ -175,9 +162,8 @@ module ASTTransform
       body.filter_map { |statement| statement.loc&.line }.min
     end
 
-    # The proc's text must precede its call: a placement whose body lines
-    # fall at or after the executing statement (or any statement after it)
-    # cannot be laid out — the assignment would complete after the call.
+    # The proc's text must precede its call: a placement whose body lines fall at or after the executing statement
+    # (or any statement after it) cannot be laid out — the assignment would complete after the call.
     def check_placement_precedes_execution!(placement, executing_statement, following_statements)
       return if placement.line.nil?
 
@@ -198,17 +184,15 @@ module ASTTransform
       statements.index { |statement| statement.loc&.line && statement.loc.line > placement.line } || statements.size
     end
 
-    # Node types opening a new local-variable scope: assignments inside them
-    # were invisible to the method scope in the original source too, so they
-    # get no pre-declaration.
+    # Node types opening a new local-variable scope: assignments inside them were invisible to the method scope in
+    # the original source too, so they get no pre-declaration.
     NEW_SCOPE_TYPES = [:def, :defs, :class, :module, :sclass].freeze
-    # Block literals: locals first assigned inside them are block-local (the
-    # same lexical rule the pre-declarations exist to work around), but their
-    # callee/arguments evaluate at method scope and are still descended.
+    # Block literals: locals first assigned inside them are block-local (the same lexical rule the pre-declarations
+    # exist to work around), but their callee/arguments evaluate at method scope and are still descended.
     BLOCK_TYPES = [:block, :numblock, :itblock].freeze
 
-    # Locals the thunk body assigns at method scope, in first-assignment
-    # order (covers masgn/op_asgn targets — they all carry :lvasgn nodes).
+    # Locals the thunk body assigns at method scope, in first-assignment order (covers masgn/op_asgn targets — they
+    # all carry :lvasgn nodes).
     def method_scope_assignments(node, names = [])
       return names unless node.is_a?(::Parser::AST::Node)
       return names if NEW_SCOPE_TYPES.include?(node.type)

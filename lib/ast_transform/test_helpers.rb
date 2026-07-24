@@ -4,9 +4,8 @@ require 'ast_transform/transformer'
 require 'ast_transform/instruction_sequence'
 
 module ASTTransform
-  # Assertions for transform authors' own test suites — the enforcement arm
-  # of the authoring contract ("textual order is source order"). Never loaded
-  # in production; require it from test code:
+  # Assertions for transform authors' own test suites — the enforcement arm of the authoring contract ("textual
+  # order is source order"). Never loaded in production; require it from test code:
   #
   #   require "ast_transform/test_helpers"
   #
@@ -14,12 +13,10 @@ module ASTTransform
   #     include ASTTransform::TestHelpers
   #   end
   module TestHelpers
-    # Transforms +source+ through the real pipeline (transform + line-aligned
-    # emission), re-parses both sides, matches surviving statements by
-    # location, and asserts each one's emitted line equals its source line.
-    # Statements the transform deletes (e.g. description strings) are exempt;
-    # statements the transform rewrites in place keep their anchor and are
-    # checked.
+    # Transforms +source+ through the real pipeline (transform + line-aligned emission), re-parses both sides,
+    # matches surviving statements by location, and asserts each one's emitted line equals its source line.
+    # Statements the transform deletes (e.g. description strings) are exempt; statements the transform rewrites in
+    # place keep their anchor and are checked.
     #
     # @param source [String] fixture source
     # @param transformations [Array<ASTTransform::AbstractTransformation>]
@@ -48,9 +45,8 @@ module ASTTransform
       MESSAGE
     end
 
-    # Runtime complement of assert_line_aligned: compiles +source+ through
-    # the full pipeline under +path+, executes it, and asserts the raw first
-    # backtrace frame — no filtering of any kind — is "<path>:<raise_at>".
+    # Runtime complement of assert_line_aligned: compiles +source+ through the full pipeline under +path+, executes
+    # it, and asserts the raw first backtrace frame — no filtering of any kind — is "<path>:<raise_at>".
     #
     # @param source [String] fixture that raises when executed
     # @param path [String] pseudo source path to compile under
@@ -70,10 +66,9 @@ module ASTTransform
 
     private
 
-    # Flat statement renders and their first line, keyed by unparsed text so
-    # source and emitted sides can be matched without location identity.
-    # Duplicate renders keep their first occurrence — good enough for
-    # fixtures, which authors control.
+    # Flat statement renders and their first line, keyed by unparsed text so source and emitted sides can be matched
+    # without location identity. Duplicate renders keep their first occurrence — good enough for fixtures, which
+    # authors control.
     def statement_lines(ast, lines = {})
       return lines unless ast.is_a?(::Parser::AST::Node)
 
