@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require 'ast_transform/test_helpers'
+require 'ast_transform/testing/assertions'
 require 'ast_transform/abstract_transformation'
 
 module ASTTransform
-  class TestHelpersTest < Minitest::Test
+  class AssertionsTest < Minitest::Test
     extend ASTTransform::Declarative
-    include ASTTransform::TestHelpers
+    include ASTTransform::Testing::Assertions
 
     # Rewrites statements in place (keeps anchors) — always aligned.
     class InPlaceTransformation < ASTTransform::AbstractTransformation
@@ -62,7 +62,7 @@ module ASTTransform
         raise "expected boom" if value == 1
       HEREDOC
 
-      assert_backtrace_lines(source, path: File.expand_path('tmp/test/helpers_fixture.rb'), raise_at: 3)
+      assert_backtrace_lines(source, path: File.expand_path('tmp/test/assertions_fixture.rb'), raise_at: 3)
     end
   end
 end

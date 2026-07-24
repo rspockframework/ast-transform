@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Line-aligned emission: transformed code is emitted with every loc-carrying statement on its original source line, making backtraces, breakpoints, and debugger display correct by construction (`LineAlignedEmitter`).
 - Authoring toolkit in `TransformationHelper`: `s_at` (loc-anchored node construction), `thunk` (a single invariant-checked `Thunk` node spliced at the execution point; the lowering derives the hidden proc's textual placement from the body's source locations), and `run_after` (sequence-level execution reordering that preserves textual/source order). Thunks lower to a non-lambda proc, so `return` still returns from the enclosing method, and locals assigned by thunked statements are pre-declared to stay method-scope. Reusing one thunk node executes its body from several points.
 - `ASTTransform::Node.register`: type-routed construction of custom IR node classes through `s`, with an emitter postcondition (`LineAlignedEmitter::UnloweredNodeTypeError`) rejecting custom types that were not lowered before emission.
-- `ast_transform/test_helpers` (test-only): `assert_line_aligned` and `assert_backtrace_lines` for transform authors' suites.
+- `ast_transform/testing/assertions` (test-only): `assert_line_aligned` and `assert_backtrace_lines` for transform authors' suites.
 - Error types, each owned by its producer: `TransformationHelper::MissingLocationError`, `ThunkLowering::PlacementError`, `LineAlignedEmitter::UnloweredNodeTypeError`. Thunk construction invariants raise plain `ArgumentError`.
 
 ### Removed

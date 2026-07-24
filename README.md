@@ -205,7 +205,7 @@ Custom node types are IR **between stages that understand them** — the stage t
 
 #### Testing your transformation
 
-`require 'ast_transform/test_helpers'` (test-only) provides:
+`require 'ast_transform/testing/assertions'` (test-only) provides `ASTTransform::Testing::Assertions`, a Minitest-flavored module to include in your test class:
 
 * `assert_line_aligned(source, *transformations)` — transforms `source` through the real pipeline and asserts every surviving statement is emitted at its source line.
 * `assert_backtrace_lines(source, path:, raise_at:)` — compiles and executes `source`, asserting the raw first backtrace frame cites `path:raise_at` with no filtering.
