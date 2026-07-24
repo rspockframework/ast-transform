@@ -134,6 +134,18 @@ module ASTTransform
         'else', 'celebrate', 'ensure', 'cleanup', 'end'], emitted_lines
     end
 
+    # A fully synthetic ensure (e.g. a transform wrapping a body in teardown, like RSpock's Cleanup) has no keyword
+    # line to target: the keyword must open a fresh line, never `;`-pack after the preceding statement.
+    test "a loc-less ensure keyword goes on a fresh line, never packed" do
+      synthetic_def = s(:def, :run, s(:args),
+        s(:ensure, s(:send, nil, :work), s(:send, nil, :cleanup)))
+
+      emitted = emit(synthetic_def)
+
+      assert(emitted.lines.any? { |line| line.start_with?('ensure') }, emitted)
+      refute_includes emitted, '; ensure', emitted
+    end
+
     test "a standalone begin/end block emits its statements at their source lines" do
       source = <<~HEREDOC
         begin
