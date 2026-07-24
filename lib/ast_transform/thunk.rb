@@ -25,19 +25,14 @@ module ASTTransform
     # No behavior — a named class over a bare Object.new only for self-documenting AST dumps and greppability.
     class Id; end
 
-    # Raised at construction when a Thunk node's children violate its invariants (missing id, empty body). Every
-    # construction path funnels through Thunk#initialize — including Processor rebuilds — so a malformed thunk
-    # cannot exist in a tree.
-    class MalformedError < StandardError; end
-
     def initialize(type, children, properties = {})
       id, *body = children
       unless id.is_a?(ASTTransform::Thunk::Id)
-        raise MalformedError,
+        raise ArgumentError,
           "a Thunk's first child must be its #{Thunk::Id} (got #{id.class}); build thunks with the " \
             "thunk(*statements) helper"
       end
-      raise MalformedError, "a Thunk must wrap at least one statement" if body.empty?
+      raise ArgumentError, "a Thunk must wrap at least one statement" if body.empty?
 
       # Captured before super (which freezes the node); frozen so the shared array cannot be mutated out from under
       # +children+. Rebuilds via +updated+ re-run initialize, so the capture can never go stale.

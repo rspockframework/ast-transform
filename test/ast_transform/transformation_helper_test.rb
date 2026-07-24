@@ -62,13 +62,13 @@ module ASTTransform
     end
 
     test "a Thunk without an id cannot be constructed" do
-      error = assert_raises(Thunk::MalformedError) { s(:ast_thunk, parse("foo\n")) }
+      error = assert_raises(ArgumentError) { s(:ast_thunk, parse("foo\n")) }
 
       assert_includes error.message, 'Thunk::Id'
     end
 
     test "a Thunk with an empty body cannot be constructed" do
-      error = assert_raises(Thunk::MalformedError) { thunk }
+      error = assert_raises(ArgumentError) { thunk }
 
       assert_includes error.message, 'at least one statement'
     end
@@ -80,7 +80,7 @@ module ASTTransform
 
       assert_instance_of Thunk, rebuilt
       assert_same node.id, rebuilt.id
-      assert_raises(Thunk::MalformedError) { node.updated(nil, [node.id]) }
+      assert_raises(ArgumentError) { node.updated(nil, [node.id]) }
     end
 
     test "AbstractTransformation descends thunk bodies by default" do
