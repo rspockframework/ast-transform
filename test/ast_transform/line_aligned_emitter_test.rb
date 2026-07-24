@@ -142,8 +142,11 @@ module ASTTransform
 
       emitted = emit(synthetic_def)
 
-      assert(emitted.lines.any? { |line| line.start_with?('ensure') }, emitted)
-      refute_includes emitted, '; ensure', emitted
+      # Everything is loc-less, so it packs — except the keyword, which opens a fresh line.
+      assert_equal <<~RUBY, emitted
+        def run; work
+        ensure; cleanup; end
+      RUBY
     end
 
     test "a standalone begin/end block emits its statements at their source lines" do
