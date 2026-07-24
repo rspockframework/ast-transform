@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 module ASTTransform
   # Raised by authoring helpers (e.g. +s_at+) when a node that must carry a
   # source location does not have one.

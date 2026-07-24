@@ -22,15 +22,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
   spec.required_ruby_version = '>= 3.3'
 
-  # Development dependencies
-  spec.add_development_dependency("bundler", ">= 2.1")
-  spec.add_development_dependency("minitest", "~> 5.14")
-  spec.add_development_dependency("minitest-reporters", "~> 1.4")
-  spec.add_development_dependency("pry", ">= 0.14")
-  spec.add_development_dependency("rake", "~> 13.0")
-  # rubocop-shopify >= 3.0 requires Ruby >= 3.3; bump alongside our own floor.
-  spec.add_development_dependency("rubocop-shopify", "~> 2.18")
-  spec.add_development_dependency("simplecov", "~> 0.22")
+  # Development dependencies live in the Gemfile (Gemspec/DevelopmentDependencies).
 
   # Runtime dependencies
   # parser provides the runtime AST vocabulary (Parser::AST::Node/Processor,

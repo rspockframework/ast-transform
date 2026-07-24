@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'test_helper'
 require 'ast_transform/line_aligned_emitter'
 require 'ast_transform/transformation_helper'

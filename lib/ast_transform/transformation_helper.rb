@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'parser'
 require 'ast_transform/node'
 require 'ast_transform/thunk'

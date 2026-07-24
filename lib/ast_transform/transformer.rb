@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'prism'
 require 'prism/translation/parser'
 require 'unparser'

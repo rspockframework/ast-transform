@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'test_helper'
 require 'ast_transform/test_helpers'
 require 'ast_transform/abstract_transformation'
