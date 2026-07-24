@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - Unreleased
+## [3.0.0] - 2026-07-24
 ### Added
 - Line-aligned emission: transformed code is emitted with every loc-carrying statement on its original source line, making backtraces, breakpoints, and debugger display correct by construction (`LineAlignedEmitter`).
 - Authoring toolkit in `TransformationHelper`: `s_at` (loc-anchored node construction), `thunk` (a single invariant-checked `Thunk` node spliced at the execution point; the lowering derives the hidden proc's textual placement from the body's source locations), and `run_after` (sequence-level execution reordering that preserves textual/source order). Thunks lower to a non-lambda proc, so `return` still returns from the enclosing method, and locals assigned by thunked statements are pre-declared to stay method-scope. Reusing one thunk node executes its body from several points.
