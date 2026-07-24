@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'prism/translation/parser'
+require "prism/translation/parser"
 
 module ASTTransform
   # Extends the default Prism parser builder to distinguish keyword arguments

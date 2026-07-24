@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 module ASTTransform
   module InstructionSequence
     class << self
@@ -22,12 +23,12 @@ module ASTTransform
       def write_pathname(file_path)
         project_path = File.expand_path("")
         relative_source_file_pathname = Pathname.new(file_path).relative_path_from(Pathname.new(project_path))
-        Pathname.new("").join(project_path, 'tmp', 'ast_transform', relative_source_file_pathname)
+        Pathname.new("").join(project_path, "tmp", "ast_transform", relative_source_file_pathname)
       end
 
       def write(string, pathname)
         FileUtils.mkdir_p(pathname.dirname)
-        File.open(pathname, 'w') do |file|
+        File.open(pathname, "w") do |file|
           file.write(string)
         end
       end

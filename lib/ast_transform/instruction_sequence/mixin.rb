@@ -1,8 +1,9 @@
 # frozen_string_literal: true
-require 'pathname'
-require 'ast_transform/transformer'
-require 'ast_transform/transformation'
-require 'ast_transform/instruction_sequence/mixin_utils'
+
+require "pathname"
+require "ast_transform/transformer"
+require "ast_transform/transformation"
+require "ast_transform/instruction_sequence/mixin_utils"
 
 module ASTTransform
   module InstructionSequence
@@ -15,7 +16,7 @@ module ASTTransform
         # via magic comments, so we never need to set it ourselves.
         source = File.binread(source_path)
 
-        return ASTTransform::MixinUtils.try_super(self, :load_iseq, source_path) unless source.include?('transform!'.b)
+        return ASTTransform::MixinUtils.try_super(self, :load_iseq, source_path) unless source.include?("transform!".b)
 
         ASTTransform::InstructionSequence.source_to_transformed_iseq(source, source_path)
       end

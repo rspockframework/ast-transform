@@ -1,8 +1,9 @@
 # frozen_string_literal: true
-require 'ast_transform'
-require 'ast_transform/abstract_transformation'
-require 'ast_transform/transformer'
-require 'unparser'
+
+require "ast_transform"
+require "ast_transform/abstract_transformation"
+require "ast_transform/transformer"
+require "unparser"
 
 module ASTTransform
   class Transformation < ASTTransform::AbstractTransformation
@@ -18,9 +19,9 @@ module ASTTransform
 
       count_before_reject = children.size
 
-      children.reject!.with_index { |child_node, index|
+      children.reject!.with_index do |child_node, index|
         transform_node?(child_node) && transformable_node?(next_child(node, index))
-      }
+      end
 
       processed = process_all(children)
 
@@ -68,19 +69,14 @@ module ASTTransform
 
     def extract_transformation(node)
       return unless node.is_a?(Parser::AST::Node)
-      return unless node.children.count >= 2
+      return if node.children.count < 2
 
-      if node.children[1] == :new
-        require_transformation(node)
-        code = Unparser.unparse(node)
+      require_transformation(node)
+      code = Unparser.unparse(node)
+      # A bare constant reference is instantiated; an explicit .new is kept as written.
+      code = "#{code}.new" unless node.children[1] == :new
 
-        TOPLEVEL_BINDING.eval(code)
-      else
-        require_transformation(node)
-        code = "#{Unparser.unparse(node)}.new"
-
-        TOPLEVEL_BINDING.eval(code)
-      end
+      TOPLEVEL_BINDING.eval(code)
     end
 
     def require_transformation(node)
@@ -100,11 +96,12 @@ module ASTTransform
       acronyms = ASTTransform.acronyms
       acronym_regex = acronyms.empty? ? /(?=a)b/ : /#{acronyms.join("|")}/
       return const_name unless /[A-Z-]|::/.match?(const_name)
-      word = const_name.to_s.gsub("::".freeze, "/".freeze)
-      word.gsub!(/(?:(?<=([A-Za-z\d]))|\b)(#{acronym_regex})(?=\b|[^a-z])/) { "#{$1 && '_'.freeze }#{$2.downcase}" }
-      word.gsub!(/([A-Z\d]+)([A-Z][a-z])/, '\1_\2'.freeze)
-      word.gsub!(/([a-z\d])([A-Z])/, '\1_\2'.freeze)
-      word.tr!("-".freeze, "_".freeze)
+
+      word = const_name.to_s.gsub("::", "/")
+      word.gsub!(/(?:(?<=([A-Za-z\d]))|\b)(#{acronym_regex})(?=\b|[^a-z])/) { "#{::Regexp.last_match(1) && "_"}#{::Regexp.last_match(2).downcase}" }
+      word.gsub!(/([A-Z\d]+)([A-Z][a-z])/, '\1_\2')
+      word.gsub!(/([a-z\d])([A-Z])/, '\1_\2')
+      word.tr!("-", "_")
       word.downcase!
       word
     end

@@ -1,9 +1,10 @@
 # frozen_string_literal: true
-require 'pathname'
-require 'test_helper'
-require 'transformation_helper'
-require 'ast_transform/abstract_transformation'
-require 'ast_transform/transformer'
+
+require "pathname"
+require "test_helper"
+require "transformation_helper"
+require "ast_transform/abstract_transformation"
+require "ast_transform/transformer"
 
 module ASTTransform
   class TransformerTest < Minitest::Test
@@ -15,6 +16,7 @@ module ASTTransform
 
       def process_node(node)
         return unless node.type == :send
+
         node.updated(:send, [nil, :foo])
       end
     end
@@ -24,6 +26,7 @@ module ASTTransform
 
       def process_node(node)
         return unless node.type == :send && node.children == [nil, :foo]
+
         node.updated(:send, [nil, :bar])
       end
     end
@@ -33,6 +36,7 @@ module ASTTransform
 
       def process_node(node)
         return unless node.type == :send && node.children == [nil, :bar]
+
         node.updated(:send, [nil, :foo_bar])
       end
     end
@@ -56,16 +60,16 @@ module ASTTransform
     end
 
     test "#build_ast_from_file returns the expected AST" do
-      pathname = Pathname.new('').join('tmp', 'test', 'ast_transform', 'transformer_test.rb')
+      pathname = Pathname.new("").join("tmp", "test", "ast_transform", "transformer_test.rb")
 
       FileUtils.mkdir_p(pathname.dirname)
-      File.open(pathname, 'w') do |file|
+      File.open(pathname, "w") do |file|
         file.write(@source)
       end
 
       ast = @transformer.build_ast_from_file(pathname.to_s)
 
-      assert_equal @source_ast, ast
+      assert_equal(@source_ast, ast)
     ensure
       File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end
@@ -75,37 +79,37 @@ module ASTTransform
     end
 
     test "#transform with multiple transformations" do
-      assert_equal 'foo_bar', @multi_transformer.transform(@source)
+      assert_equal "foo_bar", @multi_transformer.transform(@source)
     end
 
     test "#transform_file returns the expected transformed code" do
-      pathname = Pathname.new('').join('tmp', 'test', 'ast_transform', 'transformer_test.rb')
-      transformed_pathname = Pathname.new('').join('tmp', 'test', 'ast_transform', 'transformed_transformer_test.rb')
+      pathname = Pathname.new("").join("tmp", "test", "ast_transform", "transformer_test.rb")
+      transformed_pathname = Pathname.new("").join("tmp", "test", "ast_transform", "transformed_transformer_test.rb")
 
       FileUtils.mkdir_p(pathname.dirname)
-      File.open(pathname, 'w') do |file|
+      File.open(pathname, "w") do |file|
         file.write(@source)
       end
 
       transformed_source = @multi_transformer.transform_file(pathname.to_s, transformed_pathname.to_s)
 
-      assert_equal 'foo_bar', transformed_source
+      assert_equal("foo_bar", transformed_source)
     ensure
       File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end
 
     test "#transform_file_source returns the expected transformed code" do
-      pathname = Pathname.new('').join('tmp', 'test', 'ast_transform', 'transformer_test.rb')
-      transformed_pathname = Pathname.new('').join('tmp', 'test', 'ast_transform', 'transformed_transformer_test.rb')
+      pathname = Pathname.new("").join("tmp", "test", "ast_transform", "transformer_test.rb")
+      transformed_pathname = Pathname.new("").join("tmp", "test", "ast_transform", "transformed_transformer_test.rb")
 
       FileUtils.mkdir_p(pathname.dirname)
-      File.open(pathname, 'w') do |file|
+      File.open(pathname, "w") do |file|
         file.write(@source)
       end
 
       transformed_source = @multi_transformer.transform_file_source(@source, pathname.to_s, transformed_pathname.to_s)
 
-      assert_equal 'foo_bar', transformed_source
+      assert_equal("foo_bar", transformed_source)
     ensure
       File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end

@@ -1,9 +1,10 @@
 # frozen_string_literal: true
-require 'simplecov'
-require 'simplecov_json_formatter'
+
+require "simplecov"
+require "simplecov_json_formatter"
 
 SimpleCov.start do
-  add_filter('/test/')
+  add_filter("/test/")
   formatter SimpleCov::Formatter::MultiFormatter.new([
     SimpleCov::Formatter::HTMLFormatter,
     SimpleCov::Formatter::JSONFormatter,
@@ -15,6 +16,6 @@ require "ast_transform"
 
 # Pry
 # NOTE: Must be loaded before ASTTransform.install, otherwise we get a bunch of require_relative errors
-require 'pry'
+require "pry"
 
 ASTTransform.install

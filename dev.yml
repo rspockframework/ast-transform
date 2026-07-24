@@ -1,0 +1,11 @@
+name: ast_transform
+commands:
+  up:
+    desc: Install gems
+    run: bundle install
+  test:
+    desc: Run this repo's tests
+    run: bundle exec rake test
+  style:
+    desc: Run RuboCop
+    run: bundle exec rubocop

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
-require 'ast_transform/transformation_helper'
+
+require "ast_transform/transformation_helper"
 
 module ASTTransform
   class AbstractTransformation < Parser::AST::Processor

@@ -1,4 +1,6 @@
-$LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../../lib", __FILE__))
 require "ast_transform"
 
 require "declarative"
@@ -6,7 +8,7 @@ require "declarative"
 # Minitest
 begin
   require "rubygems"
-  gem "minitest"
+  gem("minitest")
 rescue Gem::LoadError
   # do nothing
 end
