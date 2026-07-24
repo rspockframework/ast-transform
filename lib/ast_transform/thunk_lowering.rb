@@ -30,6 +30,9 @@ module ASTTransform
   # would be invisible to the statements that read them after the execution point. Self-assignment registers the name
   # (nil until the thunk runs — exactly what an unexecuted assignment yields) without clobbering an already-assigned
   # value.
+  #
+  # Stateless: the thunks encountered during one lowering are tracked in a Registry created at +lower+ entry, so an
+  # instance is a reusable collaborator.
   class ThunkLowering
     include TransformationHelper
 
@@ -37,33 +40,65 @@ module ASTTransform
     # +statements+ the pre-declarations plus the proc assignment.
     Placement = Struct.new(:line, :statements)
 
+    # The thunks encountered during one lowering, keyed by token identity: allocates each thunk's hidden lvar name
+    # on first occurrence and verifies later occurrences carry the same body.
+    class Registry
+      def initialize
+        @names_by_token = {}.compare_by_identity
+        @bodies_by_token = {}.compare_by_identity
+      end
+
+      def known?(token)
+        @names_by_token.key?(token)
+      end
+
+      # @return [Symbol] the hidden lvar name allocated for +token+.
+      def register(token, body)
+        name = :"__ast_thunk_#{@names_by_token.size + 1}__"
+        @names_by_token[token] = name
+        @bodies_by_token[token] = body
+        name
+      end
+
+      def name_for(token)
+        @names_by_token.fetch(token)
+      end
+
+      def verify_same_body!(token, body)
+        return if @bodies_by_token[token] == body
+
+        raise ThunkPlacementError,
+          'occurrences of one thunk carry diverging bodies; reuse the same thunk node to multiplex'
+      end
+
+      def hidden_names
+        @names_by_token.values
+      end
+    end
+    private_constant :Registry
+
     SEQUENCE_TYPES = [:begin, :kwbegin].freeze
     # Scope-opening containers: the hidden lvar cannot be referenced across these boundaries, so placements arising
     # inside must land inside.
     SCOPE_BODY_INDEXES = { def: 2, defs: 3, class: 2, module: 1, sclass: 1 }.freeze
 
-    def initialize
-      @names_by_token = {}.compare_by_identity
-      @bodies_by_token = {}.compare_by_identity
-    end
-
     # @param node [Parser::AST::Node] tree possibly containing Thunk nodes
     # @return [Parser::AST::Node] tree with thunks lowered to plain Ruby
     # @raise [ThunkPlacementError] when a thunk body's source lines fall after its execution point, or occurrences of
     #   one thunk diverge
-    def run(node)
-      lower_body(node)
+    def lower(node)
+      lower_body(node, Registry.new)
     end
 
     private
 
     # Lowers a node standing in statement-body position (a container's body or the root), absorbing any placements
     # that arise within it.
-    def lower_body(node)
+    def lower_body(node, registry)
       return node unless node.is_a?(::Parser::AST::Node)
-      return lower_sequence(node) if SEQUENCE_TYPES.include?(node.type)
+      return lower_sequence(node, registry) if SEQUENCE_TYPES.include?(node.type)
 
-      lowered, placements = lower_expression(node)
+      lowered, placements = lower_expression(node, registry)
       return lowered if placements.empty?
 
       # A loc-less :begin in statement position; the emitter flattens it into the surrounding statement stream.
@@ -71,11 +106,11 @@ module ASTTransform
     end
 
     # Lowers a statement sequence, inserting each placement among the statements by the body's source line.
-    def lower_sequence(node)
+    def lower_sequence(node, registry)
       statements = []
 
       node.children.each_with_index do |child, index|
-        lowered, placements = lower_expression(child)
+        lowered, placements = lower_expression(child, registry)
         placements.each do |placement|
           check_placement_precedes_execution!(placement, child, node.children[(index + 1)..])
           statements.insert(insertion_index(statements, placement), *placement.statements)
@@ -90,33 +125,33 @@ module ASTTransform
     # the enclosing statement sequence.
     #
     # @return [Array(Parser::AST::Node, Array<Placement>)]
-    def lower_expression(node)
+    def lower_expression(node, registry)
       return [node, []] unless node.is_a?(::Parser::AST::Node)
 
       case node.type
       when :ast_thunk
-        lower_thunk(node)
+        lower_thunk(node, registry)
       when *SEQUENCE_TYPES
-        [lower_sequence(node), []]
+        [lower_sequence(node, registry), []]
       when :ensure, :rescue
-        [node.updated(nil, node.children.map { |child| lower_body(child) }), []]
+        [node.updated(nil, node.children.map { |child| lower_body(child, registry) }), []]
       when :resbody
         exceptions, capture, body = node.children
-        [node.updated(nil, [exceptions, capture, lower_body(body)]), []]
+        [node.updated(nil, [exceptions, capture, lower_body(body, registry)]), []]
       else
-        lower_generic(node)
+        lower_generic(node, registry)
       end
     end
 
-    def lower_generic(node)
+    def lower_generic(node, registry)
       scope_body_index = SCOPE_BODY_INDEXES[node.type]
       pending = []
 
       children = node.children.each_with_index.map do |child, index|
         if index == scope_body_index
-          lower_body(child)
+          lower_body(child, registry)
         else
-          lowered, placements = lower_expression(child)
+          lowered, placements = lower_expression(child, registry)
           pending.concat(placements)
           lowered
         end
@@ -127,33 +162,27 @@ module ASTTransform
 
     # An occurrence of a thunk: the first occurrence of its token yields the placement; every occurrence yields the
     # call.
-    def lower_thunk(node)
+    def lower_thunk(node, registry)
       token = node.token
 
-      if @names_by_token.key?(token)
-        unless @bodies_by_token[token] == node.body
-          raise ThunkPlacementError,
-            "occurrences of one thunk carry diverging bodies; reuse the same thunk node to multiplex"
-        end
-        return [call_node(token), []]
+      if registry.known?(token)
+        registry.verify_same_body!(token, node.body)
+        return [call_node(token, registry), []]
       end
 
-      name = :"__ast_thunk_#{@names_by_token.size + 1}__"
-      @names_by_token[token] = name
-      @bodies_by_token[token] = node.body
-
-      lowered_body = lower_sequence(s(:begin, *node.body))
-      placement = Placement.new(body_first_line(node.body), placement_statements(name, lowered_body))
-      [call_node(token), [placement]]
+      name = registry.register(token, node.body)
+      lowered_body = lower_sequence(s(:begin, *node.body), registry)
+      placement = Placement.new(body_first_line(node.body), placement_statements(name, lowered_body, registry))
+      [call_node(token, registry), [placement]]
     end
 
-    def call_node(token)
-      s(:send, s(:lvar, @names_by_token.fetch(token)), :call)
+    def call_node(token, registry)
+      s(:send, s(:lvar, registry.name_for(token)), :call)
     end
 
-    def placement_statements(name, lowered_body)
+    def placement_statements(name, lowered_body, registry)
       assignment = s(:lvasgn, name, s(:block, s(:send, nil, :proc), s(:args), lowered_body))
-      hidden_names = @names_by_token.values
+      hidden_names = registry.hidden_names
       pre_declared = method_scope_assignments(lowered_body).reject { |local| hidden_names.include?(local) }
       pre_declared.map { |local| s(:lvasgn, local, s(:lvar, local)) } << assignment
     end

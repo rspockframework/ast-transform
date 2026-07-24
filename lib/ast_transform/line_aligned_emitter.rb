@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-require 'unparser'
 require 'ast_transform/node'
 require 'ast_transform/errors'
+require 'ast_transform/layout'
+require 'ast_transform/statement_renderer'
 require 'ast_transform/thunk_lowering'
 
 module ASTTransform
@@ -10,16 +11,17 @@ module ASTTransform
   # backtraces, breakpoints and debugger display are correct by construction — CRuby derives line numbers from
   # physical text position, so placement is our line table.
   #
-  # Cursor algorithm over statement sequences:
+  # Placement policy over statement sequences:
   #
-  # 1. Statement has loc and target_line > cursor: pad with newlines, emit at the target line, indented to the
-  #    statement's source column.
-  # 2. Statement has loc and target_line <= cursor: pack (`; `) onto the current line. A user statement landing here
-  #    means the transform moved it — the alignment auditor's concern, not a runtime failure.
-  # 3. No loc: pack onto the current line — synthetic code has no source-line truth to preserve.
+  # 1. Statement has loc: target its source line — the Layout pads to reach it, or packs (`; `) when the cursor has
+  #    already passed it. A user statement packing means the transform moved it — the alignment auditor's concern,
+  #    not a runtime failure.
+  # 2. No loc: pack onto the current line — synthetic code has no source-line truth to preserve.
   #
-  # Multi-line renders advance the cursor by their height; displaced statements pack and emission re-anchors at the
-  # next statement that fits. Total: never raises on layout.
+  # The emitter owns the Ruby knowledge: walking statement structure, deciding which line each node targets, and
+  # that keywords can never be `;`-packed. The pad-or-pack mechanics live in Layout; statement-to-text rendering
+  # (and its isolation workarounds) in StatementRenderer — both created per emission, so the emitter itself is
+  # stateless and an instance is a reusable collaborator.
   #
   # Thunk nodes are lowered (ThunkLowering) before layout; the emitter's postcondition is that no custom node type
   # (ast_* markers or types registered on ASTTransform::Node) crosses the unparse boundary — they are IR between
@@ -36,127 +38,84 @@ module ASTTransform
     ASSIGNMENT_TYPES = [:lvasgn, :ivasgn, :gvasgn, :casgn].freeze
     BLOCK_VALUE_TYPES = [:block, :numblock, :itblock].freeze
 
-    # @param ast [Parser::AST::Node] transformed AST
-    # @param source_path [String] original file path (for error messages)
-    def initialize(ast, source_path)
-      @ast = ast
-      @source_path = source_path
-      @local_variables = Set.new
+    # @param thunk_lowering [ThunkLowering] the lowering run ahead of emission.
+    def initialize(thunk_lowering: ThunkLowering.new)
+      @thunk_lowering = thunk_lowering
     end
 
+    # @param ast [Parser::AST::Node] transformed AST
+    # @param source_path [String] original file path (for error messages)
     # @return [String] transformed source, line-aligned
     # @raise [ThunkPlacementError] if a thunk cannot be textually placed
     # @raise [UnloweredNodeTypeError] if a custom node type survived to emission
-    def emit
-      lowered = ThunkLowering.new.run(@ast)
-      assert_no_custom_types(lowered)
+    def emit(ast, source_path)
+      lowered = @thunk_lowering.lower(ast)
+      assert_no_custom_types(lowered, source_path)
 
-      @local_variables = collect_local_variables(lowered)
-      @lines = []
-      emit_statements(statements_of(lowered))
-      "#{@lines.join("\n")}\n"
+      layout = Layout.new
+      renderer = StatementRenderer.for_tree(lowered)
+      emit_statements(statements_of(lowered), layout, renderer)
+      layout.to_source
     end
 
     private
 
-    def emit_statements(statements)
-      statements.each { |statement| emit_statement(statement) }
+    def emit_statements(statements, layout, renderer)
+      statements.each { |statement| emit_statement(statement, layout, renderer) }
     end
 
-    def emit_statement(node)
+    def emit_statement(node, layout, renderer)
       if recursive_container?(node)
-        emit_container(node)
+        emit_container(node, layout, renderer)
       else
-        place(node.loc&.line, aligned_render(node), column: node.loc&.column)
+        layout.place(node.loc&.line, renderer.aligned_render(node), column: node.loc&.column)
       end
-    end
-
-    # Unparser normalizes some single-line constructs into multi-line form (e.g. modifier-if into if/end), which
-    # would push following statements off their lines. When the render is taller than the statement's source,
-    # compress it back to one line — verified by re-parse so a statement that cannot be safely single-lined
-    # (e.g. containing a heredoc) falls back to its multi-line render and re-anchors after itself.
-    def aligned_render(node)
-      render = unparse(node)
-      loc = node.loc
-      return render unless loc.respond_to?(:last_line) && loc.line
-
-      source_height = loc.last_line - loc.line + 1
-      return render if render.count("\n") < source_height
-
-      compress_to_single_line(render) || render
-    end
-
-    def compress_to_single_line(render)
-      candidate = render.split("\n").map(&:strip).join('; ')
-      # Both sides parsed without scope context, so lvar/send ambiguity cancels out; equality means the newline join
-      # preserved structure.
-      Unparser.parse(candidate) == Unparser.parse(render) ? candidate : nil
-    rescue Parser::SyntaxError
-      nil
-    end
-
-    # Statements are unparsed in isolation, losing the surrounding scope's local-variable context; without it,
-    # Unparser re-parses identifiers as method calls and its dstr round-trip verification fails. Feed it every local
-    # assigned or bound anywhere in the tree — an over-approximation that is safe because it only informs Unparser's
-    # re-parse verification.
-    def unparse(node)
-      Unparser.unparse(node, static_local_variables: @local_variables)
-    end
-
-    LOCAL_BINDING_TYPES = [:lvasgn, :arg, :optarg, :restarg, :kwarg, :kwoptarg, :blockarg, :shadowarg].freeze
-
-    def collect_local_variables(node, names = Set.new)
-      return names unless node.is_a?(::Parser::AST::Node)
-
-      names << node.children[0] if LOCAL_BINDING_TYPES.include?(node.type) && node.children[0]
-      node.children.each { |child| collect_local_variables(child, names) }
-      names
     end
 
     # Emits a container body that may be a bare :ensure/:rescue node (their begin/end context comes from the
     # surrounding def/block/kwbegin, so the keywords must be emitted inline, aligned like statements).
-    def emit_body(body)
+    def emit_body(body, layout, renderer)
       case body&.type
-      when :ensure then emit_ensure(body)
-      when :rescue then emit_rescue(body)
-      else emit_statements(statements_of(body))
+      when :ensure then emit_ensure(body, layout, renderer)
+      when :rescue then emit_rescue(body, layout, renderer)
+      else emit_statements(statements_of(body), layout, renderer)
       end
     end
 
-    def emit_ensure(node)
+    def emit_ensure(node, layout, renderer)
       *body, ensurer = node.children
-      body.each { |statement| emit_body(statement) }
-      place_keyword(keyword_line(node), 'ensure', column: keyword_column(node))
-      emit_statements(statements_of(ensurer))
+      body.each { |statement| emit_body(statement, layout, renderer) }
+      place_keyword(layout, keyword_line(node), 'ensure', column: keyword_column(node))
+      emit_statements(statements_of(ensurer), layout, renderer)
     end
 
-    def emit_rescue(node)
+    def emit_rescue(node, layout, renderer)
       body, *resbodies, else_body = node.children
-      emit_body(body)
-      resbodies.each { |resbody| emit_resbody(resbody) }
+      emit_body(body, layout, renderer)
+      resbodies.each { |resbody| emit_resbody(resbody, layout, renderer) }
       return if else_body.nil?
 
       else_range = node.loc.else if node.loc.respond_to?(:else)
-      place_keyword(else_range&.line, 'else', column: else_range&.column)
-      emit_statements(statements_of(else_body))
+      place_keyword(layout, else_range&.line, 'else', column: else_range&.column)
+      emit_statements(statements_of(else_body), layout, renderer)
     end
 
-    def emit_resbody(node)
+    def emit_resbody(node, layout, renderer)
       exceptions, capture, body = node.children
       header = ['rescue']
-      header << " #{Unparser.unparse(exceptions).delete_prefix('[').delete_suffix(']')}" if exceptions
+      header << " #{renderer.unparse(exceptions).delete_prefix('[').delete_suffix(']')}" if exceptions
       header << " => #{capture.children[0]}" if capture
-      place_keyword(node.loc&.line, header.join, column: node.loc&.column)
-      emit_statements(statements_of(body))
+      place_keyword(layout, node.loc&.line, header.join, column: node.loc&.column)
+      emit_statements(statements_of(body), layout, renderer)
     end
 
     # Keywords (rescue/ensure/else) cannot be `;`-packed after a statement; when their line is taken they go on a
     # fresh line instead.
-    def place_keyword(target_line, keyword, column: nil)
-      if target_line && target_line > @lines.size
-        place(target_line, keyword, column: column)
+    def place_keyword(layout, target_line, keyword, column: nil)
+      if target_line && target_line > layout.cursor
+        layout.place(target_line, keyword, column: column)
       else
-        @lines << keyword
+        layout.place_on_fresh_line(keyword)
       end
     end
 
@@ -181,15 +140,15 @@ module ASTTransform
 
     # Renders a container's opener and closer from the node with its body emptied, then recurses into the body so
     # nested statements align.
-    def emit_container(node)
-      opener, closer = container_delimiters(node)
-      place(node.loc&.line, opener, column: node.loc&.column)
-      emit_body(container_body(node))
-      place(closer_line(node), closer, column: closer_column(node))
+    def emit_container(node, layout, renderer)
+      opener, closer = container_delimiters(node, renderer)
+      layout.place(node.loc&.line, opener, column: node.loc&.column)
+      emit_body(container_body(node), layout, renderer)
+      layout.place(closer_line(node), closer, column: closer_column(node))
     end
 
-    def container_delimiters(node)
-      rendered = unparse(empty_container(node)).split("\n").reject(&:empty?)
+    def container_delimiters(node, renderer)
+      rendered = renderer.unparse(empty_container(node)).split("\n").reject(&:empty?)
       opener = rendered[0..-2].join("\n")
       closer = rendered.last
 
@@ -247,49 +206,16 @@ module ASTTransform
       end
     end
 
-    # Places +render+ at +target_line+ when the cursor hasn't passed it; otherwise packs onto the current line.
-    # Multi-line renders advance the cursor by their height. When opening a fresh line, the render is indented to the
-    # statement's source +column+ — cosmetic only (leading whitespace is never significant in emitted code; heredocs
-    # are normalized to inline strings), but it keeps the artifact and test expectations visually close to the
-    # source. Packed statements ignore the column, as do an Unparser render's continuation lines (they keep
-    # Unparser's own relative indentation).
-    def place(target_line, render, column: nil)
-      first, *rest = render.split("\n")
-
-      if target_line && target_line > @lines.size
-        @lines << '' while @lines.size < target_line
-        @lines[-1] = indented(first, column)
-      else
-        pack(first)
-      end
-
-      @lines.concat(rest)
-    end
-
-    def indented(text, column)
-      column && column.positive? ? "#{' ' * column}#{text}" : text
-    end
-
-    # The last line is never blank here: padding blanks are only created inside +place+, which immediately overwrites
-    # the padded line.
-    def pack(text)
-      if @lines.empty?
-        @lines << text
-      else
-        @lines[-1] = "#{@lines.last}; #{text}"
-      end
-    end
-
-    def assert_no_custom_types(node)
+    def assert_no_custom_types(node, source_path)
       return unless node.is_a?(::Parser::AST::Node)
 
       if node.type.start_with?('ast_') || Node.registry.key?(node.type)
         raise UnloweredNodeTypeError,
-          "custom node type :#{node.type} reached emission in #{@source_path}; custom types are " \
+          "custom node type :#{node.type} reached emission in #{source_path}; custom types are " \
             "IR between transformation stages and must be lowered by the stage that understands them"
       end
 
-      node.children.each { |child| assert_no_custom_types(child) }
+      node.children.each { |child| assert_no_custom_types(child, source_path) }
     end
   end
 end

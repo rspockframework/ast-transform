@@ -19,7 +19,7 @@ module ASTTransform
     end
 
     def emit(ast)
-      LineAlignedEmitter.new(ast, 'fixture.rb').emit
+      LineAlignedEmitter.new.emit(ast, 'fixture.rb')
     end
 
     # Runs emitted code with real method semantics (return target, method
@@ -145,16 +145,6 @@ module ASTTransform
       emitted_lines = emit(parse(source)).lines.map(&:strip)
 
       assert_equal ['begin', 'first_call', 'second_call', 'end'], emitted_lines
-    end
-
-    test "compress_to_single_line declines renders whose single-line join does not parse" do
-      emitter = LineAlignedEmitter.new(parse("noop\n"), 'fixture.rb')
-
-      # No current Unparser render joins into invalid syntax (heredocs are
-      # normalized to inline strings), so exercise the totality guard
-      # directly: layout must fall back, never raise, whatever future
-      # Unparser output looks like.
-      assert_nil emitter.send(:compress_to_single_line, "value = <<~TXT\n  hi\nTXT")
     end
 
     test "pre-declares locals the thunk body assigns at method scope" do

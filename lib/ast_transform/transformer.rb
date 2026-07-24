@@ -11,8 +11,10 @@ module ASTTransform
     # Constructs a new Transformer instance.
     #
     # @param transformations [Array<ASTTransform::AbstractTransformation>] The transformations to be run.
-    def initialize(*transformations)
+    # @param emitter [ASTTransform::LineAlignedEmitter] The emitter rendering transformed ASTs back to source.
+    def initialize(*transformations, emitter: LineAlignedEmitter.new)
       @transformations = transformations
+      @emitter = emitter
     end
 
     # Builds the AST for the given +source+.
@@ -44,7 +46,7 @@ module ASTTransform
     def transform(source)
       ast = build_ast(source)
       transformed_ast = transform_ast(ast)
-      LineAlignedEmitter.new(transformed_ast, 'tmp').emit
+      @emitter.emit(transformed_ast, 'tmp')
     end
 
     # Transforms the give +file_path+.
@@ -74,7 +76,7 @@ module ASTTransform
       # At this point, the transformed_ast contains source locations for the original +source+.
       transformed_ast = transform_ast(source_ast)
 
-      LineAlignedEmitter.new(transformed_ast, file_path).emit
+      @emitter.emit(transformed_ast, file_path)
     end
 
     # Transforms the given +ast+.
