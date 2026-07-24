@@ -1,8 +1,9 @@
 # frozen_string_literal: true
-require 'test_helper'
-require 'transformation_helper'
-require 'ast_transform/abstract_transformation'
-require 'ast_transform/transformer'
+
+require "test_helper"
+require "transformation_helper"
+require "ast_transform/abstract_transformation"
+require "ast_transform/transformer"
 
 module ASTTransform
   class SourceMapTest < Minitest::Test
@@ -22,11 +23,11 @@ module ASTTransform
         method_call
       HEREDOC
 
-      actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
+      actual_transformed_source = transformer.transform_file_source(source, "src", "transformed")
 
       assert_equal "method_call + 1", actual_transformed_source
 
-      source_map = ASTTransform::SourceMap.for_file_path('transformed')
+      source_map = ASTTransform::SourceMap.for_file_path("transformed")
 
       assert_equal 1, source_map.line(1)
     end
@@ -44,12 +45,12 @@ module ASTTransform
         method_call
       HEREDOC
 
-      actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
+      actual_transformed_source = transformer.transform_file_source(source, "src", "transformed")
 
       assert_equal "method_call + 1", actual_transformed_source
 
-      transformer.transform_file_source(source, 'src', 'transformed')
-      source_map = ASTTransform::SourceMap.for_file_path('transformed')
+      transformer.transform_file_source(source, "src", "transformed")
+      source_map = ASTTransform::SourceMap.for_file_path("transformed")
 
       assert_equal 1, source_map.line(1)
     end
@@ -68,11 +69,11 @@ module ASTTransform
         method_call2
       HEREDOC
 
-      actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
+      actual_transformed_source = transformer.transform_file_source(source, "src", "transformed")
 
       assert_equal "method_call1 + method_call2", actual_transformed_source
 
-      source_map = ASTTransform::SourceMap.for_file_path('transformed')
+      source_map = ASTTransform::SourceMap.for_file_path("transformed")
 
       assert_equal 1, source_map.line(1)
     end
@@ -95,11 +96,11 @@ module ASTTransform
         method_call2
       HEREDOC
 
-      actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
+      actual_transformed_source = transformer.transform_file_source(source, "src", "transformed")
 
       assert_equal expected_transformed_source, actual_transformed_source
 
-      source_map = ASTTransform::SourceMap.for_file_path('transformed')
+      source_map = ASTTransform::SourceMap.for_file_path("transformed")
 
       assert_equal 1, source_map.line(1)
       assert_equal 1, source_map.line(2)
@@ -112,11 +113,11 @@ module ASTTransform
         method_call
       HEREDOC
 
-      transformer.transform_file_source(source, '/original/path.rb', '/transformed/path.rb')
+      transformer.transform_file_source(source, "/original/path.rb", "/transformed/path.rb")
 
-      source_map = ASTTransform::SourceMap.for_file_path('/original/path.rb')
+      source_map = ASTTransform::SourceMap.for_file_path("/original/path.rb")
       refute_nil source_map, "source map should be retrievable by source file path"
-      assert_equal '/original/path.rb', source_map.source_file_path
+      assert_equal "/original/path.rb", source_map.source_file_path
     end
 
     test "#line returns nil when transformation creates nodes that don't contain previous nodes" do
@@ -132,11 +133,11 @@ module ASTTransform
         method_call1 + method_call2
       HEREDOC
 
-      actual_transformed_source = transformer.transform_file_source(source, 'src', 'transformed')
+      actual_transformed_source = transformer.transform_file_source(source, "src", "transformed")
 
       assert_equal "1 + 2", actual_transformed_source
 
-      source_map = ASTTransform::SourceMap.for_file_path('transformed')
+      source_map = ASTTransform::SourceMap.for_file_path("transformed")
 
       assert_nil source_map.line(1)
     end

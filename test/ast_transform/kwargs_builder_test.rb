@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require 'test_helper'
-require 'ast_transform/kwargs_builder'
+require "test_helper"
+require "ast_transform/kwargs_builder"
 
 module ASTTransform
   class KwargsBuilderTest < Minitest::Test
@@ -13,7 +13,7 @@ module ASTTransform
     end
 
     test "#associate emits :kwargs for bare keyword arguments" do
-      ast = parse('foo(bar: 1, baz: 2)')
+      ast = parse("foo(bar: 1, baz: 2)")
       node = find_node(ast, :kwargs)
 
       refute_nil node, "expected a :kwargs node for bare keyword arguments"
@@ -21,7 +21,7 @@ module ASTTransform
     end
 
     test "#associate emits :hash for explicit hash with braces" do
-      ast = parse('foo({ bar: 1, baz: 2 })')
+      ast = parse("foo({ bar: 1, baz: 2 })")
       hash_node = find_node(ast, :hash)
 
       refute_nil hash_node, "expected a :hash node for explicit hash"
@@ -38,7 +38,7 @@ module ASTTransform
     end
 
     test "#associate emits :hash for standalone hash literals" do
-      ast = parse('x = { a: 1, b: 2 }')
+      ast = parse("x = { a: 1, b: 2 }")
       hash_node = find_node(ast, :hash)
 
       refute_nil hash_node, "expected a :hash node for hash literal"
@@ -47,7 +47,7 @@ module ASTTransform
     end
 
     test "#associate preserves keyword argument pairs" do
-      ast = parse('foo(bar: 1, baz: 2)')
+      ast = parse("foo(bar: 1, baz: 2)")
       node = find_node(ast, :kwargs)
 
       assert_equal 2, node.children.length
@@ -59,7 +59,7 @@ module ASTTransform
     end
 
     test "#associate emits :kwargs for keyword arguments in constructor calls" do
-      ast = parse('Foo.new(bar: 1, baz: 2)')
+      ast = parse("Foo.new(bar: 1, baz: 2)")
       node = find_node(ast, :kwargs)
 
       refute_nil node, "expected a :kwargs node in constructor call"
@@ -67,7 +67,7 @@ module ASTTransform
     end
 
     test "#associate emits :kwargs for double-splat keyword arguments" do
-      ast = parse('foo(**opts)')
+      ast = parse("foo(**opts)")
       node = find_node(ast, :kwargs)
 
       refute_nil node, "expected a :kwargs node for double-splat"
@@ -76,14 +76,14 @@ module ASTTransform
     private
 
     def parse(source)
-      buffer = Parser::Source::Buffer.new('test')
+      buffer = Parser::Source::Buffer.new("test")
       buffer.source = source
       @parser.parse(buffer)
     end
 
     def find_node(ast, type)
       return ast if ast.type == type
-      return nil unless ast.respond_to?(:children)
+      return unless ast.respond_to?(:children)
 
       ast.children.each do |child|
         next unless child.is_a?(Parser::AST::Node)

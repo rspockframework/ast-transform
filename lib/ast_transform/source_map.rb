@@ -1,5 +1,6 @@
 # frozen_string_literal: true
-require 'parser'
+
+require "parser"
 
 module ASTTransform
   class SourceMap
@@ -28,7 +29,9 @@ module ASTTransform
       private
 
       def source_maps
-        @@source_maps ||= {}
+        # Class instance var (not @@): read/written only through this method
+        # inside class << self, and SourceMap has no subclasses to share with.
+        @source_maps ||= {}
       end
     end
 
@@ -97,7 +100,7 @@ module ASTTransform
     #
     # @return [Hash] A Hash containing line numbers from executed code to source code.
     def build_source_map
-      (1..line_count).each.with_object({}) {|it, hash| hash[it] = source_line(it) }
+      (1..line_count).each.with_object({}) { |it, hash| hash[it] = source_line(it) }
     end
 
     # Retrieves the source line for the given +line_number+ in the executed code.
@@ -226,6 +229,7 @@ module ASTTransform
     def dig_node(node, indexes)
       indexes.inject(node) do |node, index|
         return nil unless node.is_a?(Parser::AST::Node)
+
         node.children[index]
       end
     end

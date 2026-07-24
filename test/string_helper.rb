@@ -4,7 +4,7 @@ module ASTTransform
   module Helpers
     module StringHelper
       def strip_end_line(str)
-        str.gsub(/\n$/, '')
+        str.gsub(/\n$/, "")
       end
     end
   end

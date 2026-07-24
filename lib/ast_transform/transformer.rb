@@ -1,9 +1,10 @@
 # frozen_string_literal: true
-require 'prism'
-require 'prism/translation/parser'
-require 'unparser'
-require 'ast_transform/kwargs_builder'
-require 'ast_transform/source_map'
+
+require "prism"
+require "prism/translation/parser"
+require "unparser"
+require "ast_transform/kwargs_builder"
+require "ast_transform/source_map"
 
 module ASTTransform
   class Transformer
@@ -20,7 +21,7 @@ module ASTTransform
     # @param file_path [String] The file_path. This is important for source mapping in backtraces.
     #
     # @return [Parser::AST::Node] The AST.
-    def build_ast(source, file_path: 'tmp')
+    def build_ast(source, file_path: "tmp")
       buffer = create_buffer(source, file_path)
       parser.parse(buffer)
     end

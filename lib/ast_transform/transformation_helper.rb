@@ -1,11 +1,14 @@
 # frozen_string_literal: true
-require 'parser'
+
+require "parser"
 
 module ASTTransform
   module TransformationHelper
-    def self.included(base)
-      base.extend(Methods)
-      base.include(Methods)
+    class << self
+      def included(base)
+        base.extend(Methods)
+        base.include(Methods)
+      end
     end
 
     module Methods

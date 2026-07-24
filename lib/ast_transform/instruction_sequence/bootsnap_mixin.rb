@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require 'ast_transform/transformer'
-require 'ast_transform/instruction_sequence/mixin_utils'
-require 'pathname'
+require "ast_transform/transformer"
+require "ast_transform/instruction_sequence/mixin_utils"
+require "pathname"
 
 module ASTTransform
   module InstructionSequence
@@ -14,7 +14,7 @@ module ASTTransform
         iseq = ASTTransform::InstructionSequence.source_to_transformed_iseq(source, source_path)
         iseq.to_binary
       rescue SyntaxError
-        raise ::Bootsnap::CompileCache::Uncompilable, 'syntax error'
+        raise ::Bootsnap::CompileCache::Uncompilable, "syntax error"
       end
     end
   end

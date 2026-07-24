@@ -1,7 +1,8 @@
 # frozen_string_literal: true
-require 'test_helper'
-require 'transformation_helper'
-require 'ast_transform/abstract_transformation'
+
+require "test_helper"
+require "transformation_helper"
+require "ast_transform/abstract_transformation"
 
 module ASTTransform
   class AbstractTransformationTest < Minitest::Test
