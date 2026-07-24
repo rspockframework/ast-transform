@@ -71,7 +71,7 @@ module ASTTransform
       # @param statements [Array<Parser::AST::Node>] statements to wrap
       # @return [ASTTransform::Thunk] the thunk node
       def thunk(*statements)
-        s(:ast_thunk, ThunkToken.new, *statements)
+        s(:ast_thunk, Thunk::Id.new, *statements)
       end
 
       # The paved road for execution reordering in flat statement sequences. Named for the constraint, not the

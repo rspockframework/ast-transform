@@ -50,21 +50,21 @@ module ASTTransform
       assert_includes error.message, 'send'
     end
 
-    test "thunk builds a Thunk node carrying an internal token and the body" do
+    test "thunk builds a Thunk node carrying an internal id and the body" do
       statements = parse("foo\nbar\n").children
 
       node = thunk(*statements)
 
       assert_instance_of Thunk, node
       assert_equal :ast_thunk, node.type
-      assert_instance_of ThunkToken, node.token
+      assert_instance_of Thunk::Id, node.id
       assert_equal statements, node.body
     end
 
-    test "a Thunk without a token cannot be constructed" do
+    test "a Thunk without an id cannot be constructed" do
       error = assert_raises(MalformedThunkError) { s(:ast_thunk, parse("foo\n")) }
 
-      assert_includes error.message, 'ThunkToken'
+      assert_includes error.message, 'Thunk::Id'
     end
 
     test "a Thunk with an empty body cannot be constructed" do
@@ -73,14 +73,14 @@ module ASTTransform
       assert_includes error.message, 'at least one statement'
     end
 
-    test "a Processor rebuild preserves the Thunk class, token, and invariants" do
+    test "a Processor rebuild preserves the Thunk class, id, and invariants" do
       node = thunk(parse("foo\n"))
 
-      rebuilt = node.updated(nil, [node.token, parse("bar\n")])
+      rebuilt = node.updated(nil, [node.id, parse("bar\n")])
 
       assert_instance_of Thunk, rebuilt
-      assert_same node.token, rebuilt.token
-      assert_raises(MalformedThunkError) { node.updated(nil, [node.token]) }
+      assert_same node.id, rebuilt.id
+      assert_raises(MalformedThunkError) { node.updated(nil, [node.id]) }
     end
 
     test "AbstractTransformation descends thunk bodies by default" do
@@ -94,14 +94,8 @@ module ASTTransform
       processed = swap_foo_for_bar.new.run(node)
 
       assert_instance_of Thunk, processed
-      assert_same node.token, processed.token
+      assert_same node.id, processed.id
       assert_equal :bar, processed.body[0].children[1]
-    end
-
-    test "ThunkToken#inspect names the class so AST dumps are self-documenting" do
-      token = thunk(parse("foo\n")).token
-
-      assert_match(/\A#<ASTTransform::ThunkToken 0x\h+>\z/, token.inspect)
     end
 
     test "thunk imposes no control-flow validation (semantics are the proc lowering's contract)" do

@@ -81,7 +81,7 @@ module ASTTransform
 
     test "occurrences of one thunk with diverging bodies raise ThunkPlacementError" do
       original = thunk(parse("foo\n"))
-      diverged = original.updated(nil, [original.token, parse("bar\n")])
+      diverged = original.updated(nil, [original.id, parse("bar\n")])
 
       error = assert_raises(ThunkPlacementError) { emit(s(:begin, original, diverged)) }
 

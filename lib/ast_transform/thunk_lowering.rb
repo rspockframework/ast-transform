@@ -6,7 +6,7 @@ require 'ast_transform/errors'
 require 'ast_transform/transformation_helper'
 
 module ASTTransform
-  # Lowers Thunk nodes into plain Ruby ahead of emission. Each unique thunk (grouped by token identity) becomes a
+  # Lowers Thunk nodes into plain Ruby ahead of emission. Each unique thunk (grouped by id identity) becomes a
   # hidden proc; each occurrence becomes the proc's call:
   #
   #   thunk placed at the execution point
@@ -40,39 +40,39 @@ module ASTTransform
     # +statements+ the pre-declarations plus the proc assignment.
     Placement = Struct.new(:line, :statements)
 
-    # The thunks encountered during one lowering, keyed by token identity: allocates each thunk's hidden lvar name
+    # The thunks encountered during one lowering, keyed by identity: allocates each thunk's hidden lvar name
     # on first occurrence and verifies later occurrences carry the same body.
     class Registry
       def initialize
-        @names_by_token = {}.compare_by_identity
-        @bodies_by_token = {}.compare_by_identity
+        @names_by_id = {}.compare_by_identity
+        @bodies_by_id = {}.compare_by_identity
       end
 
-      def known?(token)
-        @names_by_token.key?(token)
+      def known?(id)
+        @names_by_id.key?(id)
       end
 
-      # @return [Symbol] the hidden lvar name allocated for +token+.
-      def register(token, body)
-        name = :"__ast_thunk_#{@names_by_token.size + 1}__"
-        @names_by_token[token] = name
-        @bodies_by_token[token] = body
+      # @return [Symbol] the hidden lvar name allocated for +id+.
+      def register(id, body)
+        name = :"__ast_thunk_#{@names_by_id.size + 1}__"
+        @names_by_id[id] = name
+        @bodies_by_id[id] = body
         name
       end
 
-      def name_for(token)
-        @names_by_token.fetch(token)
+      def name_for(id)
+        @names_by_id.fetch(id)
       end
 
-      def verify_same_body!(token, body)
-        return if @bodies_by_token[token] == body
+      def verify_same_body!(id, body)
+        return if @bodies_by_id[id] == body
 
         raise ThunkPlacementError,
           'occurrences of one thunk carry diverging bodies; reuse the same thunk node to multiplex'
       end
 
       def hidden_names
-        @names_by_token.values
+        @names_by_id.values
       end
     end
     private_constant :Registry
@@ -160,24 +160,24 @@ module ASTTransform
       [node.updated(nil, children), pending]
     end
 
-    # An occurrence of a thunk: the first occurrence of its token yields the placement; every occurrence yields the
+    # An occurrence of a thunk: the first occurrence of its id yields the placement; every occurrence yields the
     # call.
     def lower_thunk(node, registry)
-      token = node.token
+      id = node.id
 
-      if registry.known?(token)
-        registry.verify_same_body!(token, node.body)
-        return [call_node(token, registry), []]
+      if registry.known?(id)
+        registry.verify_same_body!(id, node.body)
+        return [call_node(id, registry), []]
       end
 
-      name = registry.register(token, node.body)
+      name = registry.register(id, node.body)
       lowered_body = lower_sequence(s(:begin, *node.body), registry)
       placement = Placement.new(body_first_line(node.body), placement_statements(name, lowered_body, registry))
-      [call_node(token, registry), [placement]]
+      [call_node(id, registry), [placement]]
     end
 
-    def call_node(token, registry)
-      s(:send, s(:lvar, registry.name_for(token)), :call)
+    def call_node(id, registry)
+      s(:send, s(:lvar, registry.name_for(id)), :call)
     end
 
     def placement_statements(name, lowered_body, registry)

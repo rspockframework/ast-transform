@@ -19,34 +19,38 @@ module ASTTransform
   class Thunk < Node
     register :ast_thunk
 
-    attr_reader :token, :body
+    # The identity of a Thunk across transformation passes: Processor and Node#updated rebuilds create new node
+    # objects, so node identity does not survive — but children DO (carried by reference through every rebuild). Every
+    # rebuild of a thunk therefore carries this same id object, and the lowering groups occurrences by its object
+    # identity: one proc, one call per occurrence. Minted internally by the +thunk+ helper, never handled by authors.
+    # No behavior — a named class over a bare Object.new only for self-documenting AST dumps and greppability.
+    class Id; end
 
     def initialize(type, children, properties = {})
-      token, *body = children
-      unless token.is_a?(ThunkToken)
+      id, *body = children
+      unless id.is_a?(ASTTransform::Thunk::Id)
         raise MalformedThunkError,
-          "a Thunk's first child must be its ThunkToken (got #{token.class}); " \
-            "build thunks with the thunk(*statements) helper"
+          "a Thunk's first child must be its #{Thunk::Id} (got #{id.class}); build thunks with the " \
+            "thunk(*statements) helper"
       end
       raise MalformedThunkError, "a Thunk must wrap at least one statement" if body.empty?
 
       # Captured before super (which freezes the node); frozen so the shared array cannot be mutated out from under
       # +children+. Rebuilds via +updated+ re-run initialize, so the capture can never go stale.
-      @token = token
+      @id = id
       @body = body.freeze
 
       super
     end
-  end
 
-  # The identity of a Thunk across transformation passes: Processor and Node#updated rebuilds create new node
-  # objects, so node identity does not survive — but children DO (carried by reference through every rebuild). Every
-  # rebuild of a thunk therefore carries this same token object, and the lowering groups occurrences by its object
-  # identity: one proc, one call per occurrence. Minted internally by the +thunk+ helper, never handled by authors.
-  # No behavior — a named class over a bare Object.new only for self-documenting AST dumps and greppability.
-  class ThunkToken
-    def inspect
-      "#<ASTTransform::ThunkToken 0x#{object_id.to_s(16)}>"
-    end
+    # Retrieves the Thunk's id.
+    # @return [ASTTransform::Thunk::Id] The Id.
+    attr_reader(:id)
+
+    # Retrieves the Thunk's body.
+    #
+    # @note Same as the +Parser::AST::Node#children+
+    # @return [Array<Parser::AST::Node>] The nodes forming the body of the Thunk.
+    attr_reader(:body)
   end
 end
