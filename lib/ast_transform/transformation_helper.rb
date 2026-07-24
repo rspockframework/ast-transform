@@ -3,7 +3,6 @@
 require 'parser'
 require 'ast_transform/node'
 require 'ast_transform/thunk'
-require 'ast_transform/errors'
 
 module ASTTransform
   # The transform-authoring layer. Three shapes:
@@ -17,6 +16,9 @@ module ASTTransform
   # at its source line; when execution order must differ from textual order, authors express it as a thunk instead of
   # moving text.
   module TransformationHelper
+    # Raised by authoring helpers (e.g. +s_at+) when a node that must carry a source location does not have one.
+    class MissingLocationError < StandardError; end
+
     class << self
       def included(base)
         base.extend(Methods)

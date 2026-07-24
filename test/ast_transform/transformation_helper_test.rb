@@ -44,8 +44,8 @@ module ASTTransform
       assert_equal anchor.loc.expression, node.loc.expression
     end
 
-    test "s_at raises MissingLocationError for loc-less anchors" do
-      error = assert_raises(MissingLocationError) { s_at(s(:send, nil, :foo), :send, nil, :bar) }
+    test "s_at raises TransformationHelper::MissingLocationError for loc-less anchors" do
+      error = assert_raises(TransformationHelper::MissingLocationError) { s_at(s(:send, nil, :foo), :send, nil, :bar) }
 
       assert_includes error.message, 'send'
     end
@@ -62,13 +62,13 @@ module ASTTransform
     end
 
     test "a Thunk without an id cannot be constructed" do
-      error = assert_raises(MalformedThunkError) { s(:ast_thunk, parse("foo\n")) }
+      error = assert_raises(Thunk::MalformedError) { s(:ast_thunk, parse("foo\n")) }
 
       assert_includes error.message, 'Thunk::Id'
     end
 
     test "a Thunk with an empty body cannot be constructed" do
-      error = assert_raises(MalformedThunkError) { thunk }
+      error = assert_raises(Thunk::MalformedError) { thunk }
 
       assert_includes error.message, 'at least one statement'
     end
@@ -80,7 +80,7 @@ module ASTTransform
 
       assert_instance_of Thunk, rebuilt
       assert_same node.id, rebuilt.id
-      assert_raises(MalformedThunkError) { node.updated(nil, [node.id]) }
+      assert_raises(Thunk::MalformedError) { node.updated(nil, [node.id]) }
     end
 
     test "AbstractTransformation descends thunk bodies by default" do

@@ -2,7 +2,6 @@
 
 require 'ast_transform/node'
 require 'ast_transform/thunk'
-require 'ast_transform/errors'
 require 'ast_transform/transformation_helper'
 
 module ASTTransform
@@ -40,6 +39,11 @@ module ASTTransform
     # +statements+ the pre-declarations plus the proc assignment.
     Placement = Struct.new(:line, :statements)
 
+    # Raised when a thunk cannot be placed: its body's source lines fall after the execution point (the hidden
+    # proc's text IS its assignment, so a call can never textually precede the body), or two occurrences of the
+    # same thunk carry diverging bodies.
+    class PlacementError < StandardError; end
+
     # The thunks encountered during one lowering, keyed by identity: allocates each thunk's hidden lvar name
     # on first occurrence and verifies later occurrences carry the same body.
     class Registry
@@ -67,7 +71,7 @@ module ASTTransform
       def verify_same_body!(id, body)
         return if @bodies_by_id[id] == body
 
-        raise ThunkPlacementError,
+        raise PlacementError,
           'occurrences of one thunk carry diverging bodies; reuse the same thunk node to multiplex'
       end
 
@@ -84,7 +88,7 @@ module ASTTransform
 
     # @param node [Parser::AST::Node] tree possibly containing Thunk nodes
     # @return [Parser::AST::Node] tree with thunks lowered to plain Ruby
-    # @raise [ThunkPlacementError] when a thunk body's source lines fall after its execution point, or occurrences of
+    # @raise [PlacementError] when a thunk body's source lines fall after its execution point, or occurrences of
     #   one thunk diverge
     def lower(node)
       lower_body(node, Registry.new)
@@ -202,7 +206,7 @@ module ASTTransform
       end
       return if conflicting.nil?
 
-      raise ThunkPlacementError,
+      raise PlacementError,
         "thunk body's source lines (from line #{placement.line}) fall after its execution point " \
           "(statement at line #{conflicting.loc.line}); a thunk can only delay execution, never text"
     end

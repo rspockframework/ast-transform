@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'ast_transform/node'
-require 'ast_transform/errors'
 require 'ast_transform/layout'
 require 'ast_transform/statement_renderer'
 require 'ast_transform/thunk_lowering'
@@ -27,6 +26,10 @@ module ASTTransform
   # (ast_* markers or types registered on ASTTransform::Node) crosses the unparse boundary — they are IR between
   # stages that understand them.
   class LineAlignedEmitter
+    # Raised as the emitter's postcondition when a custom node type (ast_* markers or types registered on
+    # ASTTransform::Node) reaches the unparse boundary instead of being lowered by the stage that understands it.
+    class UnloweredNodeTypeError < StandardError; end
+
     # Containers the emitter recurses into so nested statements align; every other node renders as an Unparser blob
     # at its head line.
     RECURSIVE_CONTAINER_TYPES = [:class, :module, :sclass, :def, :defs, :block, :numblock, :itblock, :kwbegin].freeze
@@ -46,7 +49,7 @@ module ASTTransform
     # @param ast [Parser::AST::Node] transformed AST
     # @param source_path [String] original file path (for error messages)
     # @return [String] transformed source, line-aligned
-    # @raise [ThunkPlacementError] if a thunk cannot be textually placed
+    # @raise [ThunkLowering::PlacementError] if a thunk cannot be textually placed
     # @raise [UnloweredNodeTypeError] if a custom node type survived to emission
     def emit(ast, source_path)
       lowered = @thunk_lowering.lower(ast)

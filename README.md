@@ -173,8 +173,8 @@ ASTTransform owns text and lines; transform authors own semantics and execution 
 `ASTTransform::TransformationHelper` (included by `AbstractTransformation`) provides the authoring toolkit:
 
 * `s(type, *children)` — builds a loc-less (synthetic) node. Registered custom types (see below) construct their registered class.
-* `s_at(anchor, type, *children)` — builds a node anchored at `anchor`'s source location, so it is emitted at `anchor`'s line. Raises `MissingLocationError` if the anchor has no location.
-* `thunk(*statements)` — wraps statements in a single `Thunk` node: splice it wherever the statements must *run*, in statement position or composed inside an expression (e.g. an `assert_raises` block body). The wrapped statements keep their own locations, and the lowering derives the hidden proc's textual placement from them — the body still emits on its source lines even though execution waits. Reuse the same node to execute one body from several points. Thunk construction is invariant-checked (`MalformedThunkError`); a body whose source lines fall after its execution point fails lowering with `ThunkPlacementError` (a thunk can only delay execution, never text).
+* `s_at(anchor, type, *children)` — builds a node anchored at `anchor`'s source location, so it is emitted at `anchor`'s line. Raises `TransformationHelper::MissingLocationError` if the anchor has no location.
+* `thunk(*statements)` — wraps statements in a single `Thunk` node: splice it wherever the statements must *run*, in statement position or composed inside an expression (e.g. an `assert_raises` block body). The wrapped statements keep their own locations, and the lowering derives the hidden proc's textual placement from them — the body still emits on its source lines even though execution waits. Reuse the same node to execute one body from several points. Thunk construction is invariant-checked (`Thunk::MalformedError`); a body whose source lines fall after its execution point fails lowering with `ThunkLowering::PlacementError` (a thunk can only delay execution, never text).
 * `run_after(statements, run:, after:)` — the paved road over `thunk`: returns a reordered copy of `statements` where the contiguous `run` executes after `after`, while remaining at its source position textually. Elements are matched by object identity.
 
 Thunked statements keep their original meaning as far as Ruby's closure semantics allow:
@@ -201,7 +201,7 @@ end
 s(:my_interaction, ...) # => InteractionNode, with domain accessors
 ```
 
-Custom node types are IR **between stages that understand them** — the stage that owns a type must lower it to plain Ruby nodes before emission. The emitter enforces this: any registered or `ast_`-prefixed type reaching emission raises `UnloweredNodeTypeError`.
+Custom node types are IR **between stages that understand them** — the stage that owns a type must lower it to plain Ruby nodes before emission. The emitter enforces this: any registered or `ast_`-prefixed type reaching emission raises `LineAlignedEmitter::UnloweredNodeTypeError`.
 
 #### Testing your transformation
 

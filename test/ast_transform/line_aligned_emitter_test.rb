@@ -68,22 +68,22 @@ module ASTTransform
       assert_equal 2, emitted.scan('__ast_thunk_1__.call').size, emitted
     end
 
-    test "a thunk whose body lines fall after its execution point raises ThunkPlacementError" do
+    test "a thunk whose body lines fall after its execution point raises ThunkLowering::PlacementError" do
       first, second, third = parse("first\nsecond\nthird\n").children
       # third's text (line 3) cannot execute after first (line 1) yet before
       # second (line 2): the proc's text IS its assignment.
       reordered = run_after([first, second, third], run: [third], after: first)
 
-      error = assert_raises(ThunkPlacementError) { emit(s(:begin, *reordered)) }
+      error = assert_raises(ThunkLowering::PlacementError) { emit(s(:begin, *reordered)) }
 
       assert_includes error.message, 'fall after its execution point'
     end
 
-    test "occurrences of one thunk with diverging bodies raise ThunkPlacementError" do
+    test "occurrences of one thunk with diverging bodies raise ThunkLowering::PlacementError" do
       original = thunk(parse("foo\n"))
       diverged = original.updated(nil, [original.id, parse("bar\n")])
 
-      error = assert_raises(ThunkPlacementError) { emit(s(:begin, original, diverged)) }
+      error = assert_raises(ThunkLowering::PlacementError) { emit(s(:begin, original, diverged)) }
 
       assert_includes error.message, 'diverging'
     end
@@ -107,8 +107,8 @@ module ASTTransform
       assert_includes emitted, '__ast_thunk_2__ = proc', emitted
     end
 
-    test "an unlowered custom node type raises UnloweredNodeTypeError" do
-      error = assert_raises(UnloweredNodeTypeError) do
+    test "an unlowered custom node type raises LineAlignedEmitter::UnloweredNodeTypeError" do
+      error = assert_raises(LineAlignedEmitter::UnloweredNodeTypeError) do
         emit(s(:begin, s(:ast_transform_emitter_test_custom)))
       end
 
