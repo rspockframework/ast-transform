@@ -19,6 +19,8 @@ module ASTTransform
   class Thunk < Node
     register :ast_thunk
 
+    attr_reader :token, :body
+
     def initialize(type, children, properties = {})
       token, *body = children
       unless token.is_a?(ThunkToken)
@@ -28,12 +30,13 @@ module ASTTransform
       end
       raise MalformedThunkError, "a Thunk must wrap at least one statement" if body.empty?
 
+      # Captured before super (which freezes the node); frozen so the shared array cannot be mutated out from under
+      # +children+. Rebuilds via +updated+ re-run initialize, so the capture can never go stale.
+      @token = token
+      @body = body.freeze
+
       super
     end
-
-    def token = children[0]
-
-    def body = children.drop(1)
   end
 
   # The identity of a Thunk across transformation passes: Processor and Node#updated rebuilds create new node
