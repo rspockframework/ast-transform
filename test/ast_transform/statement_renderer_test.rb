@@ -28,7 +28,8 @@ module ASTTransform
 
       rendered = StatementRenderer.for_tree(statement).aligned_render(statement)
 
-      assert_equal 1, rendered.lines.size, rendered
+      # Unparser normalizes the modifier-if to if/end; the join restores the source's single-line height.
+      assert_equal 'if strict; raise(ArgumentError); end', rendered
     end
 
     test "aligned_render keeps a render that already fits its source height" do
@@ -36,7 +37,7 @@ module ASTTransform
 
       rendered = StatementRenderer.for_tree(statement).aligned_render(statement)
 
-      assert_operator rendered.lines.size, :>, 1, rendered
+      assert_equal "def risky\n  compute\nend", rendered
     end
 
     test "compress_to_single_line declines renders whose single-line join does not parse" do

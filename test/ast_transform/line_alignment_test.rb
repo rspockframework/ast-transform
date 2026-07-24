@@ -61,20 +61,44 @@ module ASTTransform
     test "emission places each user statement at its source line" do
       emitted = transform_file_source(FIXTURE_SOURCE, ASTTransform::Transformation.new)
 
-      FIXTURE_LINES.each do |statement, source_line|
-        assert_equal source_line, emitted_line_number(emitted, statement),
-          "expected `#{statement}` at source line #{source_line} in:\n#{numbered(emitted)}"
-      end
+      # Statements hold lines 3, 8 and 11; the vanished comments leave blank padding, and the multi-line expression
+      # is compressed back to its first line.
+      assert_equal <<~RUBY, emitted
+        class LineAlignmentFixture
+          def self.compute
+            first_value = 1
+
+
+
+
+            second_value = first_value + 1
+
+
+            raise_helper(second_value)
+          end
+        end
+      RUBY
     end
 
     test "emission keeps user statements on their source lines when a transform injects synthetic code" do
       emitted = transform_file_source(FIXTURE_SOURCE, SetupInjectionTransformation.new)
 
-      assert_includes emitted, 'injected_setup'
-      FIXTURE_LINES.each do |statement, source_line|
-        assert_equal source_line, emitted_line_number(emitted, statement),
-          "expected `#{statement}` at source line #{source_line} in:\n#{numbered(emitted)}"
-      end
+      # The loc-less injected statement packs onto the def's line; every user statement keeps its source line.
+      assert_equal <<~RUBY, emitted
+        class LineAlignmentFixture
+          def self.compute; injected_setup
+            first_value = 1
+
+
+
+
+            second_value = first_value + 1
+
+
+            raise_helper(second_value)
+          end
+        end
+      RUBY
     end
 
     test "raw backtrace cites the source line of the raising statement, with no filtering" do
@@ -131,16 +155,6 @@ module ASTTransform
 
     def tmp_pathname(file_name)
       Pathname.new('').join(File.expand_path(''), 'tmp', 'test', 'ast_transform', file_name)
-    end
-
-    # 1-based line number of the first emitted line containing +statement+.
-    def emitted_line_number(emitted, statement)
-      index = emitted.lines.index { |line| line.include?(statement) }
-      index&.+(1)
-    end
-
-    def numbered(emitted)
-      emitted.lines.map.with_index(1) { |line, number| format('%3d| %s', number, line) }.join
     end
 
     # All line numbers the VM records for +iseq+ and its children — the lines
