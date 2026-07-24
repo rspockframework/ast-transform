@@ -22,27 +22,27 @@ module ASTTransform
     end
 
     # Runs emitted code with real method semantics (return target, method
-    # scope for locals) — exactly the environment deferred code lives in.
+    # scope for locals) — exactly the environment thunked code lives in.
     def run_as_method(emitted)
       harness = Module.new
       harness.module_eval("def self.run_case\n#{emitted}\nend", 'fixture.rb', 0)
       harness.run_case
     end
 
-    test "emits deferral pairs as a hidden-lvar proc and its call" do
+    test "lowers a thunk to a hidden-lvar proc at the body's source lines and its call" do
       given, when_statement, interaction = parse("given_setup\nwhen_body\ninteraction_setup\n").children
       reordered = run_after([given, when_statement, interaction], run: [when_statement], after: interaction)
 
       emitted = emit(s(:begin, *reordered))
 
-      assert_includes emitted, '__ast_deferred_1__ = proc', emitted
+      assert_includes emitted, '__ast_thunk_1__ = proc', emitted
       assert_includes emitted, 'when_body', emitted
-      assert_includes emitted, '__ast_deferred_1__.call', emitted
+      assert_includes emitted, '__ast_thunk_1__.call', emitted
       # Execution order: proc defined, interaction runs, then the call.
-      assert_operator emitted.index('interaction_setup'), :<, emitted.index('__ast_deferred_1__.call'), emitted
+      assert_operator emitted.index('interaction_setup'), :<, emitted.index('__ast_thunk_1__.call'), emitted
     end
 
-    test "deferred body statements stay on their source lines inside the proc" do
+    test "thunk body statements stay on their source lines inside the proc" do
       source = <<~HEREDOC
         given_setup
         when_body_first
@@ -58,53 +58,52 @@ module ASTTransform
       assert_equal 3, emitted.lines.index { |line| line.include?('when_body_second') } + 1, emitted
     end
 
-    test "a placement may be executed from multiple call sites (multiplexing)" do
-      statement = parse("shared_body\n")
-      deferral = defer(statement)
+    test "reusing one thunk node executes its body from multiple call sites (multiplexing)" do
+      shared = thunk(parse("shared_body\n"))
 
-      emitted = emit(s(:begin, deferral.placement, deferral.execution, deferral.execution))
+      emitted = emit(s(:begin, shared, shared))
 
-      assert_equal 2, emitted.scan('__ast_deferred_1__.call').size, emitted
+      assert_equal 1, emitted.scan('__ast_thunk_1__ = proc').size, emitted
+      assert_equal 2, emitted.scan('__ast_thunk_1__.call').size, emitted
     end
 
-    test "a placement with no execution point raises UnmatchedDeferralError" do
-      deferral = defer(parse("orphan_body\n"))
+    test "a thunk whose body lines fall after its execution point raises ThunkPlacementError" do
+      first, second, third = parse("first\nsecond\nthird\n").children
+      # third's text (line 3) cannot execute after first (line 1) yet before
+      # second (line 2): the proc's text IS its assignment.
+      reordered = run_after([first, second, third], run: [third], after: first)
 
-      error = assert_raises(UnmatchedDeferralError) { emit(s(:begin, deferral.placement)) }
+      error = assert_raises(ThunkPlacementError) { emit(s(:begin, *reordered)) }
 
-      assert_includes error.message, 'never executed'
+      assert_includes error.message, 'fall after its execution point'
     end
 
-    test "an execution point before its placement raises UnmatchedDeferralError" do
-      deferral = defer(parse("body\n"))
+    test "occurrences of one thunk with diverging bodies raise ThunkPlacementError" do
+      original = thunk(parse("foo\n"))
+      diverged = original.updated(nil, [original.token, parse("bar\n")])
 
-      error = assert_raises(UnmatchedDeferralError) do
-        emit(s(:begin, deferral.execution, deferral.placement))
-      end
+      error = assert_raises(ThunkPlacementError) { emit(s(:begin, original, diverged)) }
 
-      assert_includes error.message, 'before'
+      assert_includes error.message, 'diverging'
     end
 
-    test "a duplicate placement raises UnmatchedDeferralError" do
-      deferral = defer(parse("body\n"))
+    test "a loc-less thunk body packs immediately before its call" do
+      synthetic = thunk(s(:send, nil, :synthetic_body))
 
-      error = assert_raises(UnmatchedDeferralError) do
-        emit(s(:begin, deferral.placement, deferral.placement, deferral.execution))
-      end
+      emitted = emit(s(:begin, parse("real_statement\n"), synthetic))
 
-      assert_includes error.message, 'duplicate'
+      assert_includes emitted, 'real_statement; __ast_thunk_1__ = proc', emitted
+      assert_operator emitted.index('synthetic_body'), :<, emitted.index('__ast_thunk_1__.call'), emitted
     end
 
-    test "distinct deferrals get distinct hidden lvar names" do
-      first_deferral = defer(parse("first_body\n"))
-      second_deferral = defer(parse("second_body\n"))
+    test "distinct thunks get distinct hidden lvar names" do
+      first_thunk = thunk(parse("first_body\n"))
+      second_thunk = thunk(parse("second_body\n"))
 
-      emitted = emit(s(:begin,
-        first_deferral.placement, second_deferral.placement,
-        first_deferral.execution, second_deferral.execution))
+      emitted = emit(s(:begin, first_thunk, second_thunk))
 
-      assert_includes emitted, '__ast_deferred_1__ = proc', emitted
-      assert_includes emitted, '__ast_deferred_2__ = proc', emitted
+      assert_includes emitted, '__ast_thunk_1__ = proc', emitted
+      assert_includes emitted, '__ast_thunk_2__ = proc', emitted
     end
 
     test "an unlowered custom node type raises UnloweredNodeTypeError" do
@@ -157,13 +156,13 @@ module ASTTransform
       assert_nil emitter.send(:compress_to_single_line, "value = <<~TXT\n  hi\nTXT")
     end
 
-    test "pre-declares locals the deferred statements assign at method scope" do
+    test "pre-declares locals the thunk body assigns at method scope" do
       first, second, third = parse("given_setup\nresult = compute\ninteraction_setup\n").children
       reordered = run_after([first, second, third], run: [second], after: third)
 
       emitted = emit(s(:begin, *reordered))
 
-      assert_includes emitted, 'result = result; __ast_deferred_1__ = proc', emitted
+      assert_includes emitted, 'result = result; __ast_thunk_1__ = proc', emitted
     end
 
     test "pre-declarations skip block-local assignments but cover the block call's arguments" do
@@ -171,9 +170,8 @@ module ASTTransform
         outer = items.map { |item| inner = item }
         buffer.take(width = limit) { |line| sink(line) }
       HEREDOC
-      deferral = defer(*parse(source).children)
 
-      emitted = emit(s(:begin, deferral.placement, deferral.execution))
+      emitted = emit(s(:begin, thunk(*parse(source).children)))
 
       assert_includes emitted, 'outer = outer', emitted
       # width is assigned in the block call's ARGUMENTS, which evaluate at
@@ -184,14 +182,12 @@ module ASTTransform
     end
 
     test "pre-declarations skip assignments inside nested defs" do
-      deferral = defer(parse("def helper = (scoped = 1)\n"))
-
-      emitted = emit(s(:begin, deferral.placement, deferral.execution))
+      emitted = emit(s(:begin, thunk(parse("def helper = (scoped = 1)\n"))))
 
       refute_includes emitted, 'scoped = scoped', emitted
     end
 
-    test "a deferred assignment runs late but propagates to the enclosing method scope" do
+    test "a thunked assignment runs late but propagates to the enclosing method scope" do
       source = <<~HEREDOC
         log = []
         result = log.size
@@ -201,7 +197,7 @@ module ASTTransform
       first, second, third, fourth = parse(source).children
       reordered = run_after([first, second, third, fourth], run: [second], after: third)
 
-      # Deferred `result = log.size` runs after `log << :setup`, so result is
+      # Thunked `result = log.size` runs after `log << :setup`, so result is
       # 1 (textual order would give 0) — proving both the reordering and that
       # the assignment escaped the proc into the method scope.
       assert_equal [[:setup], 1], run_as_method(emit(s(:begin, *reordered)))
@@ -218,12 +214,12 @@ module ASTTransform
       reordered = run_after([first, second, third, fourth], run: [second], after: third)
 
       # snapshot reads value between the proc's definition and its call: the
-      # pre-declaration must preserve :given, and the deferred reassignment
+      # pre-declaration must preserve :given, and the thunked reassignment
       # must land afterwards.
       assert_equal [:given, :reassigned], run_as_method(emit(s(:begin, *reordered)))
     end
 
-    test "a deferred return exits the enclosing method (non-lambda proc semantics)" do
+    test "a thunked return exits the enclosing method (non-lambda proc semantics)" do
       source = <<~HEREDOC
         log = []
         return [:early, log] unless log.empty?
@@ -233,15 +229,13 @@ module ASTTransform
       first, second, third, fourth = parse(source).children
       reordered = run_after([first, second, third, fourth], run: [second], after: third)
 
-      # The deferred return fires from inside the proc but returns from the
-      # method — and only after the setup it was deferred past has run.
+      # The thunked return fires from inside the proc but returns from the
+      # method — and only after the setup it was thunked past has run.
       assert_equal [:early, [:setup]], run_as_method(emit(s(:begin, *reordered)))
     end
 
-    test "a deferred break severed from its loop keeps Ruby's native LocalJumpError" do
-      deferral = defer(parse("break\n"))
-
-      emitted = emit(s(:begin, deferral.placement, deferral.execution))
+    test "a thunked break severed from its loop keeps Ruby's native LocalJumpError" do
+      emitted = emit(s(:begin, thunk(parse("break\n"))))
 
       assert_raises(LocalJumpError) { run_as_method(emitted) }
     end
@@ -261,18 +255,34 @@ module ASTTransform
       assert_equal 4, emitted_lines.index { |line| line.include?('second_call') } + 1, emitted_lines.join
     end
 
-    test "execution markers compose inside expressions" do
+    test "a thunk composes inside expressions; its placement hoists to the enclosing sequence" do
       when_body = parse("raise_helper\n")
-      deferral = defer(when_body)
       assert_raises_call = s(:block,
         s(:send, nil, :assert_raises, s(:const, nil, :RuntimeError)),
         s(:args),
-        deferral.execution)
+        thunk(when_body))
 
-      emitted = emit(s(:begin, deferral.placement, assert_raises_call))
+      emitted = emit(s(:begin, assert_raises_call))
 
+      assert_includes emitted, '__ast_thunk_1__ = proc', emitted
       assert_includes emitted, 'assert_raises(RuntimeError)', emitted
-      assert_includes emitted, '__ast_deferred_1__.call', emitted
+      assert_includes emitted, '__ast_thunk_1__.call', emitted
+      # The proc's definition precedes the assert_raises call that runs it.
+      assert_operator emitted.index('__ast_thunk_1__ = proc'), :<, emitted.index('assert_raises'), emitted
+    end
+
+    test "a thunk inside a def stays inside the def (scope boundary)" do
+      def_node = parse("def run\n  helper\nend\n")
+      name, args, body = def_node.children
+      thunked_def = def_node.updated(nil, [name, args, thunk(body)])
+
+      emitted = emit(thunked_def)
+
+      # The proc and its call both sit between the def opener and its end;
+      # the body statement keeps its source line.
+      assert_operator emitted.index('def run'), :<, emitted.index('__ast_thunk_1__ = proc'), emitted
+      assert_operator emitted.index('__ast_thunk_1__.call'), :<, emitted.rindex('end'), emitted
+      assert_equal 2, emitted.lines.index { |line| line.include?('helper') } + 1, emitted
     end
   end
 end

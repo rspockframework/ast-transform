@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 require 'test_helper'
 require 'ast_transform/transformation_helper'
+require 'ast_transform/abstract_transformation'
 require 'ast_transform/transformer'
 
 module ASTTransform
@@ -48,47 +49,76 @@ module ASTTransform
       assert_includes error.message, 'send'
     end
 
-    test "defer returns a Deferral whose markers share a token" do
+    test "thunk builds a Thunk node carrying an internal token and the body" do
       statements = parse("foo\nbar\n").children
 
-      deferral = defer(*statements)
+      node = thunk(*statements)
 
-      assert_equal :ast_deferred, deferral.placement.type
-      assert_equal :ast_deferred_call, deferral.execution.type
-      assert_same deferral.placement.children[0], deferral.execution.children[0]
-      assert_instance_of DeferralToken, deferral.placement.children[0]
+      assert_instance_of Thunk, node
+      assert_equal :ast_thunk, node.type
+      assert_instance_of ThunkToken, node.token
+      assert_equal statements, node.body
     end
 
-    test "DeferralToken#inspect names the class so AST dumps are self-documenting" do
-      token = defer(parse("foo\n")).placement.children[0]
+    test "a Thunk without a token cannot be constructed" do
+      error = assert_raises(MalformedThunkError) { s(:ast_thunk, parse("foo\n")) }
 
-      assert_match(/\A#<ASTTransform::DeferralToken 0x\h+>\z/, token.inspect)
+      assert_includes error.message, 'ThunkToken'
     end
 
-    test "defer imposes no control-flow validation (semantics are the proc lowering's contract)" do
+    test "a Thunk with an empty body cannot be constructed" do
+      error = assert_raises(MalformedThunkError) { thunk }
+
+      assert_includes error.message, 'at least one statement'
+    end
+
+    test "a Processor rebuild preserves the Thunk class, token, and invariants" do
+      node = thunk(parse("foo\n"))
+
+      rebuilt = node.updated(nil, [node.token, parse("bar\n")])
+
+      assert_instance_of Thunk, rebuilt
+      assert_same node.token, rebuilt.token
+      assert_raises(MalformedThunkError) { node.updated(nil, [node.token]) }
+    end
+
+    test "AbstractTransformation descends thunk bodies by default" do
+      swap_foo_for_bar = Class.new(AbstractTransformation) do
+        def on_send(node)
+          node.children[1] == :foo ? node.updated(nil, [node.children[0], :bar]) : node
+        end
+      end
+      node = thunk(parse("foo\n"))
+
+      processed = swap_foo_for_bar.new.run(node)
+
+      assert_instance_of Thunk, processed
+      assert_same node.token, processed.token
+      assert_equal :bar, processed.body[0].children[1]
+    end
+
+    test "ThunkToken#inspect names the class so AST dumps are self-documenting" do
+      token = thunk(parse("foo\n")).token
+
+      assert_match(/\A#<ASTTransform::ThunkToken 0x\h+>\z/, token.inspect)
+    end
+
+    test "thunk imposes no control-flow validation (semantics are the proc lowering's contract)" do
       # return is transparent through the non-lambda proc; severed jumps keep
-      # Ruby's native behavior (see DeferralLowering / LineAlignedEmitterTest).
-      assert_equal :ast_deferred, defer(parse("return 1 if early\n")).placement.type
-      assert_equal :ast_deferred, defer(parse("break\n")).placement.type
+      # Ruby's native behavior (see ThunkLowering / LineAlignedEmitterTest).
+      assert_instance_of Thunk, thunk(parse("return 1 if early\n"))
+      assert_instance_of Thunk, thunk(parse("break\n"))
     end
 
-    test "run_after replaces the run with a placement and inserts the execution after the anchor" do
+    test "run_after removes the run and inserts a thunk after the anchor" do
       setup_statement, when_statement, interaction = parse("given\nwhen_body\ninteraction\n").children
 
       reordered = run_after([setup_statement, when_statement, interaction], run: [when_statement], after: interaction)
 
-      assert_equal [:send, :ast_deferred, :send, :ast_deferred_call], reordered.map(&:type)
+      assert_equal [:send, :send, :ast_thunk], reordered.map(&:type)
       assert_same setup_statement, reordered[0]
-      assert_same interaction, reordered[2]
-      assert_same reordered[1].children[0], reordered[3].children[0]
-    end
-
-    test "run_after supports after: textually before the run (pure sink)" do
-      first, second, third = parse("first\nsecond\nthird\n").children
-
-      reordered = run_after([first, second, third], run: [third], after: first)
-
-      assert_equal [:send, :ast_deferred_call, :send, :ast_deferred], reordered.map(&:type)
+      assert_same interaction, reordered[1]
+      assert_equal [when_statement], reordered[2].body
     end
 
     test "run_after matches statements by identity, not equality" do
@@ -98,8 +128,9 @@ module ASTTransform
       reordered = run_after([first, duplicate_of_first, last], run: [duplicate_of_first], after: last)
 
       assert_same first, reordered[0]
-      assert_equal :ast_deferred, reordered[1].type
-      assert_same last, reordered[2]
+      assert_same last, reordered[1]
+      assert_equal :ast_thunk, reordered[2].type
+      assert_same duplicate_of_first, reordered[2].body[0]
     end
 
     test "run_after rejects a non-contiguous run" do

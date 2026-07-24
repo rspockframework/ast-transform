@@ -168,20 +168,20 @@ ASTTransform owns text and lines; transform authors own semantics and execution 
 
 * A node **with** a source location is emitted at that location's line (the emitter pads with blank lines to reach it, and packs with `;` when a line is already occupied).
 * A node **without** a source location is synthetic: it packs onto the current line and inherits its neighbors' line number.
-* Textual order is source order. If your transform needs code to *execute* in a different order than it *appears*, use the deferral facility below instead of moving nodes.
+* Textual order is source order. If your transform needs code to *execute* in a different order than it *appears*, use a thunk (below) instead of moving nodes.
 
 `ASTTransform::TransformationHelper` (included by `AbstractTransformation`) provides the authoring toolkit:
 
 * `s(type, *children)` — builds a loc-less (synthetic) node. Registered custom types (see below) construct their registered class.
 * `s_at(anchor, type, *children)` — builds a node anchored at `anchor`'s source location, so it is emitted at `anchor`'s line. Raises `MissingLocationError` if the anchor has no location.
-* `defer(*statements)` — wraps statements for deferred execution. Returns a `Deferral` with two marker nodes: `placement` (splice where the statements *appear* — lowered to a hidden proc) and `execution` (splice or compose where they must *run* — lowered to the proc's call). Unmatched markers fail emission with `UnmatchedDeferralError`.
-* `run_after(statements, run:, after:)` — the paved road over `defer`: returns a reordered copy of `statements` where the contiguous `run` executes after `after`, while remaining at its source position textually. Elements are matched by object identity.
+* `thunk(*statements)` — wraps statements in a single `Thunk` node: splice it wherever the statements must *run*, in statement position or composed inside an expression (e.g. an `assert_raises` block body). The wrapped statements keep their own locations, and the lowering derives the hidden proc's textual placement from them — the body still emits on its source lines even though execution waits. Reuse the same node to execute one body from several points. Thunk construction is invariant-checked (`MalformedThunkError`); a body whose source lines fall after its execution point fails lowering with `ThunkPlacementError` (a thunk can only delay execution, never text).
+* `run_after(statements, run:, after:)` — the paved road over `thunk`: returns a reordered copy of `statements` where the contiguous `run` executes after `after`, while remaining at its source position textually. Elements are matched by object identity.
 
-Deferred statements keep their original meaning as far as Ruby's closure semantics allow:
+Thunked statements keep their original meaning as far as Ruby's closure semantics allow:
 
-* `return` still returns from the enclosing method — the hidden closure is a non-lambda proc, and placement and execution always share one method activation.
-* Locals assigned by the deferred statements stay method-scope: the lowering pre-declares each one (`result = result`) before the proc, so code after the execution point can read them. Before the deferred code runs they are `nil` — exactly what an unexecuted assignment yields.
-* Jump keywords whose owner lies *outside* the deferred statements keep Ruby's native behavior: `break`/`retry` raise `LocalJumpError` at the jump's own source line, while `next`/`redo` silently end or restart the deferred body. ASTTransform does not validate this — what a transform surface allows users to defer is the transform author's call.
+* `return` still returns from the enclosing method — the hidden closure is a non-lambda proc, and the proc and its call always share one method activation (placements never cross a `def` boundary).
+* Locals assigned by the thunked statements stay method-scope: the lowering pre-declares each one (`result = result`) before the proc, so code after the execution point can read them. Before the thunk runs they are `nil` — exactly what an unexecuted assignment yields.
+* Jump keywords whose owner lies *outside* the thunked statements keep Ruby's native behavior: `break`/`retry` raise `LocalJumpError` at the jump's own source line, while `next`/`redo` silently end or restart the thunk body. ASTTransform does not validate this — what a transform surface allows users to thunk is the transform author's call.
 
 #### Gotcha: location-only rewrites are silently dropped
 

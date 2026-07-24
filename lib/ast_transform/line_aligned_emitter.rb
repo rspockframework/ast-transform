@@ -2,7 +2,7 @@
 require 'unparser'
 require 'ast_transform/node'
 require 'ast_transform/errors'
-require 'ast_transform/deferral_lowering'
+require 'ast_transform/thunk_lowering'
 
 module ASTTransform
   # Emits a transformed AST as text in which every loc-carrying statement
@@ -24,10 +24,10 @@ module ASTTransform
   # statements pack and emission re-anchors at the next statement that fits.
   # Total: never raises on layout.
   #
-  # Deferral markers are lowered (DeferralLowering) before layout; the
-  # emitter's postcondition is that no custom node type (ast_* markers or
-  # types registered on ASTTransform::Node) crosses the unparse boundary —
-  # they are IR between stages that understand them.
+  # Thunk nodes are lowered (ThunkLowering) before layout; the emitter's
+  # postcondition is that no custom node type (ast_* markers or types
+  # registered on ASTTransform::Node) crosses the unparse boundary — they
+  # are IR between stages that understand them.
   class LineAlignedEmitter
     # Containers the emitter recurses into so nested statements align; every
     # other node renders as an Unparser blob at its head line.
@@ -35,7 +35,7 @@ module ASTTransform
     BODY_INDEXES = {
       class: 2, module: 1, sclass: 1, def: 2, defs: 3, block: 2, numblock: 2, itblock: 2
     }.freeze
-    # Assignments whose value is a block (e.g. the lowered deferral proc)
+    # Assignments whose value is a block (e.g. the lowered thunk proc)
     # recurse into the block so its body statements align.
     ASSIGNMENT_TYPES = [:lvasgn, :ivasgn, :gvasgn, :casgn].freeze
     BLOCK_VALUE_TYPES = [:block, :numblock, :itblock].freeze
@@ -49,10 +49,10 @@ module ASTTransform
     end
 
     # @return [String] transformed source, line-aligned
-    # @raise [UnmatchedDeferralError] if deferral markers cannot be reconciled
+    # @raise [ThunkPlacementError] if a thunk cannot be textually placed
     # @raise [UnloweredNodeTypeError] if a custom node type survived to emission
     def emit
-      lowered = DeferralLowering.new.run(@ast)
+      lowered = ThunkLowering.new.run(@ast)
       assert_no_custom_types(lowered)
 
       @local_variables = collect_local_variables(lowered)
@@ -233,9 +233,10 @@ module ASTTransform
       loc.end.line if loc.respond_to?(:end) && loc.end
     end
 
-    # Loc-less :begin nodes in statement position (e.g. a lowered deferral
-    # placement carrying its pre-declarations) are grouping, not structure:
-    # flatten them so each inner statement is laid out independently.
+    # Loc-less :begin nodes in statement position (e.g. a lowered thunk in a
+    # single-statement container body, carried with its placement) are
+    # grouping, not structure: flatten them so each inner statement is laid
+    # out independently.
     def statements_of(body)
       return [] if body.nil?
       return [body] unless body.type == :begin

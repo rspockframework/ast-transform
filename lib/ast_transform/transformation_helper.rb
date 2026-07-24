@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 require 'parser'
 require 'ast_transform/node'
-require 'ast_transform/deferral'
+require 'ast_transform/thunk'
 require 'ast_transform/errors'
 
 module ASTTransform
@@ -10,13 +10,13 @@ module ASTTransform
   # - Constructors (+s+, +s_at+): type + children in, fresh node out.
   # - The sequence combinator (+run_after+): sequence in, sequence out — the
   #   paved road for execution reordering.
-  # - The low-level deferral primitive (+defer+): statements in, Deferral
-  #   pair out — for execution points inside expressions.
+  # - The low-level reordering primitive (+thunk+): statements in, Thunk
+  #   node out — for execution points inside expressions.
   #
   # The contract these helpers serve: textual order is source order. The
   # emitter places every loc-carrying statement at its source line; when
   # execution order must differ from textual order, authors express it as a
-  # deferral instead of moving text.
+  # thunk instead of moving text.
   module TransformationHelper
     class << self
       def included(base)
@@ -57,44 +57,39 @@ module ASTTransform
         s(type, *children, location: ::Parser::Source::Map.new(expression))
       end
 
-      # Low-level deferral primitive. Deferral is the one reordering lever:
-      # text never moves and execution can only move later, so "hoist A above
-      # B" is expressed as "run B after A". Returns a Deferral pairing two
-      # plain marker nodes: splice +placement+ where the statements sit in
-      # the SOURCE (inner statements keep their own locs, so the emitter
-      # aligns the body even though execution waits) and +execution+ where
-      # they run — composable inside expressions, e.g. as an assert_raises
-      # block body.
+      # The low-level reordering primitive. Thunking is the one reordering
+      # lever: text never moves and execution can only move later, so "hoist
+      # A above B" is expressed as "run B after A". Returns a single Thunk
+      # node: splice it where the statements must RUN — statement position
+      # or composed inside an expression, e.g. as an assert_raises block
+      # body. The wrapped statements keep their own locs, and the lowering
+      # derives the hidden proc's textual placement from them, so the body
+      # still emits on its source lines even though execution waits. Reuse
+      # the same node to execute one body from several points.
       #
-      # The emitter lowers the pair to a hidden-lvar proc and its call, with
-      # near-transparent semantics (see DeferralLowering): +return+ still
+      # Semantics are near-transparent (see ThunkLowering): +return+ still
       # returns from the enclosing method (non-lambda proc), and locals the
-      # deferred statements assign stay method-scope (pre-declared before the
-      # proc). Jump keywords whose owner lies outside the deferred statements
+      # wrapped statements assign stay method-scope (pre-declared before the
+      # proc). Jump keywords whose owner lies outside the wrapped statements
       # keep Ruby's native behavior — +break+/+retry+ fail loudly at the
       # jump's own source line, +next+/+redo+ silently end or restart the
-      # deferred body. Weigh that when choosing what your surface defers.
+      # thunk body. Weigh that when choosing what your surface thunks.
       #
-      # Prefer +run_after+ when both points sit in one statement sequence.
+      # Prefer +run_after+ when the execution point sits in the same
+      # statement sequence as the statements.
       #
-      # @param statements [Array<Parser::AST::Node>] statements to defer
-      # @return [ASTTransform::Deferral] the placement/execution marker pair
-      def defer(*statements)
-        token = DeferralToken.new
-        Deferral.new(
-          placement: s(:ast_deferred, token, s(:begin, *statements)),
-          execution: s(:ast_deferred_call, token)
-        )
+      # @param statements [Array<Parser::AST::Node>] statements to wrap
+      # @return [ASTTransform::Thunk] the thunk node
+      def thunk(*statements)
+        s(:ast_thunk, ThunkToken.new, *statements)
       end
 
-      # The paved road for execution reordering in flat statement sequences:
-      # one call, both placements handled, nothing to forget. Named for the
-      # constraint, not the mechanism — "run X after Y" covers hoisting and
-      # sinking symmetrically, because with text pinned to source lines the
-      # only physical lever is delaying execution. +after+ may be textually
-      # before or after the +run+ statements. Returns a NEW sequence in which
-      # the +run+ statements are replaced (in place) by one placement marker
-      # and its execution marker is inserted immediately after +after+.
+      # The paved road for execution reordering in flat statement sequences.
+      # Named for the constraint, not the mechanism — with text pinned to
+      # source lines the only physical lever is delaying execution, so "run
+      # X after Y" is the constraint an author states. Returns a NEW
+      # sequence in which the +run+ statements are removed and a thunk
+      # wrapping them is inserted immediately after +after+.
       #
       # All membership checks are by identity (equal?), never ==: node
       # equality ignores location, so two textually identical statements on
@@ -106,7 +101,7 @@ module ASTTransform
       #   +statements+ (by identity) whose execution must wait
       # @param after [Parser::AST::Node] element of +statements+ (by identity,
       #   not inside +run+) the +run+ statements execute after
-      # @return [Array<Parser::AST::Node>] new sequence with markers placed
+      # @return [Array<Parser::AST::Node>] new sequence with the thunk placed
       # @raise [ArgumentError] if +run+ is not a contiguous identity-run of
       #   +statements+, or +after+ is not an element (or is inside +run+)
       def run_after(statements, run:, after:)
@@ -117,12 +112,11 @@ module ASTTransform
         raise ArgumentError, "after: must be an element of statements (by identity)" unless after_index
         raise ArgumentError, "after: cannot be inside run:" if run_range.cover?(after_index)
 
-        deferral = defer(*run)
         reordered = statements.dup
-        reordered[run_range] = [deferral.placement]
+        reordered[run_range] = []
 
         insertion_index = reordered.index { |statement| statement.equal?(after) }
-        reordered.insert(insertion_index + 1, deferral.execution)
+        reordered.insert(insertion_index + 1, thunk(*run))
       end
 
       private
