@@ -1,18 +1,20 @@
 # frozen_string_literal: true
 
-require "prism"
-require "prism/translation/parser"
-require "unparser"
-require "ast_transform/kwargs_builder"
-require "ast_transform/source_map"
+require 'prism'
+require 'prism/translation/parser'
+require 'unparser'
+require 'ast_transform/kwargs_builder'
+require 'ast_transform/line_aligned_emitter'
 
 module ASTTransform
   class Transformer
     # Constructs a new Transformer instance.
     #
     # @param transformations [Array<ASTTransform::AbstractTransformation>] The transformations to be run.
-    def initialize(*transformations)
+    # @param emitter [ASTTransform::LineAlignedEmitter] The emitter rendering transformed ASTs back to source.
+    def initialize(*transformations, emitter: LineAlignedEmitter.new)
       @transformations = transformations
+      @emitter = emitter
     end
 
     # Builds the AST for the given +source+.
@@ -40,16 +42,17 @@ module ASTTransform
     #
     # @param source [String] The input source code to be transformed.
     #
-    # @return [String] The transformed code.
+    # @return [String] The transformed code, line-aligned (see #transform_file_source).
     def transform(source)
       ast = build_ast(source)
       transformed_ast = transform_ast(ast)
-      Unparser.unparse(transformed_ast)
+      @emitter.emit(transformed_ast, 'tmp')
     end
 
     # Transforms the give +file_path+.
     #
-    # @param file_path [String] The input file to be transformed. This is required for source mapping in backtraces.
+    # @param file_path [String] The input file to be transformed. Statement placement (and therefore
+    # backtrace and breakpoint line numbers) is derived from this file's source locations.
     # @param transformed_file_path [String] The file path to the transformed file.
     #
     # @return [String] The transformed code.
@@ -61,21 +64,19 @@ module ASTTransform
     # Transforms the given +source+ in +file_path+.
     #
     # @param source [String] The input source code to be transformed.
-    # @param file_path [String] The file path for the input +source+. This is required for source mapping in backtraces.
-    # @param transformed_file_path [String] The file path to the transformed filed. This is required to register the
-    # SourceMap.
+    # @param file_path [String] The file path for the input +source+. Statement placement (and
+    # therefore backtrace and breakpoint line numbers) is derived from the source locations parsed
+    # under this path.
+    # @param transformed_file_path [String] The file path the transformed file will be written to.
     #
-    # @return [String] The transformed code.
-    def transform_file_source(source, file_path, transformed_file_path)
+    # @return [String] The transformed code, line-aligned: every statement carrying a source
+    # location is emitted at its original source line.
+    def transform_file_source(source, file_path, _transformed_file_path)
       source_ast = build_ast(source, file_path: file_path)
-      # At this point, the transformed_ast contains line number mappings for the original +source+.
+      # At this point, the transformed_ast contains source locations for the original +source+.
       transformed_ast = transform_ast(source_ast)
 
-      transformed_source = Unparser.unparse(transformed_ast)
-
-      register_source_map(file_path, transformed_file_path, transformed_ast, transformed_source)
-
-      transformed_source
+      @emitter.emit(transformed_ast, file_path)
     end
 
     # Transforms the given +ast+.
@@ -101,14 +102,6 @@ module ASTTransform
     def parser
       @parser&.reset
       @parser ||= Prism::Translation::Parser.new(ASTTransform::KwargsBuilder.new)
-    end
-
-    def register_source_map(source_file_path, transformed_file_path, transformed_ast, transformed_source)
-      # The transformed_source is re-parsed to get the correct line numbers for the transformed_ast, which is the code
-      # that will run.
-      rewritten_ast = build_ast(transformed_source)
-      source_map = ASTTransform::SourceMap.new(source_file_path, transformed_file_path, transformed_ast, rewritten_ast)
-      ASTTransform::SourceMap.register_source_map(source_map)
     end
   end
 end

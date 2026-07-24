@@ -23,6 +23,14 @@ module ASTTransform
       process_node(node)
     end
 
+    # Thunks are framework-owned IR: descend into the body so passes that don't know about thunks still process the
+    # wrapped statements. Without this, Processor's handler_missing default would pass the node through opaquely,
+    # hiding the body from every later transformation. The token (first child) is not a node and passes through
+    # untouched.
+    def on_ast_thunk(node)
+      node.updated(nil, [node.children[0], *process_all(node.children.drop(1))])
+    end
+
     private
 
     # Processes the given +node+.

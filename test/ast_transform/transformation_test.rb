@@ -43,9 +43,7 @@ module ASTTransform
         transform!(FooTransformation)
       HEREDOC
 
-      expected = "transform!(FooTransformation)"
-
-      assert_equal expected, transform(source, @transformation)
+      assert_equal source, transform(source, @transformation)
     end
 
     test "transform! is not considered an annotation if it does not annotate anything" do
@@ -71,14 +69,7 @@ module ASTTransform
         end
       HEREDOC
 
-      expected = <<~HEREDOC
-        transform!
-
-        class Potato
-        end
-      HEREDOC
-
-      assert_equal expected, transform(source, @transformation)
+      assert_equal source, transform(source, @transformation)
     end
 
     test "transform! runs the transformation if annotating a Class node" do
@@ -88,7 +79,12 @@ module ASTTransform
         end
       HEREDOC
 
-      expected = "foo"
+      # The consumed transform! annotation leaves line 1 blank; the class node's
+      # replacement stays anchored at the class's source line.
+      expected = <<~HEREDOC
+
+        foo
+      HEREDOC
 
       assert_equal expected, transform(source, @transformation)
     end
@@ -105,7 +101,11 @@ module ASTTransform
       HEREDOC
 
       expected = <<~HEREDOC
+
         foo
+
+
+
         foo
       HEREDOC
 
@@ -123,8 +123,11 @@ module ASTTransform
       HEREDOC
 
       expected = <<~HEREDOC
+
         class PrefixFoo
+
           foo
+
         end
       HEREDOC
 
@@ -141,6 +144,7 @@ module ASTTransform
       HEREDOC
 
       expected = <<~HEREDOC
+
         class PrefixFoo
           class Bar
           end
@@ -181,7 +185,9 @@ module ASTTransform
       HEREDOC
 
       expected = <<~HEREDOC
+
         foo
+
 
         class Bar
         end
@@ -201,6 +207,7 @@ module ASTTransform
       HEREDOC
 
       expected = <<~HEREDOC
+
         class PrefixFoo
           def setup
             @obj = MyClass.new(bar: 1, baz: 2)
@@ -222,6 +229,7 @@ module ASTTransform
       HEREDOC
 
       expected = <<~HEREDOC
+
         class PrefixFoo
           def call
             method("hello", bar: 1)
@@ -239,7 +247,10 @@ module ASTTransform
         end
       HEREDOC
 
-      expected = "foo"
+      expected = <<~HEREDOC
+
+        foo
+      HEREDOC
 
       assert_equal expected, transform(source, @transformation)
     end

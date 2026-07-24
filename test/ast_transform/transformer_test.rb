@@ -75,11 +75,11 @@ module ASTTransform
     end
 
     test "#transform with no transformation" do
-      assert_equal strip_end_line(@source), @transformer.transform(@source)
+      assert_equal @source, @transformer.transform(@source)
     end
 
     test "#transform with multiple transformations" do
-      assert_equal "foo_bar", @multi_transformer.transform(@source)
+      assert_equal "foo_bar\n", @multi_transformer.transform(@source)
     end
 
     test "#transform_file returns the expected transformed code" do
@@ -93,7 +93,8 @@ module ASTTransform
 
       transformed_source = @multi_transformer.transform_file(pathname.to_s, transformed_pathname.to_s)
 
-      assert_equal("foo_bar", transformed_source)
+      # Line-aligned emission always ends files with a newline.
+      assert_equal "foo_bar\n", transformed_source
     ensure
       File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end
@@ -109,7 +110,8 @@ module ASTTransform
 
       transformed_source = @multi_transformer.transform_file_source(@source, pathname.to_s, transformed_pathname.to_s)
 
-      assert_equal("foo_bar", transformed_source)
+      # Line-aligned emission always ends files with a newline.
+      assert_equal "foo_bar\n", transformed_source
     ensure
       File.delete(pathname.to_s) if File.exist?(pathname.to_s)
     end

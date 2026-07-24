@@ -5,6 +5,8 @@
 
 ASTTransform is an Abstract Syntax Tree (AST) transformation framework. It hooks into the compilation process and allows to perform AST transformations using an annotation: `transform!`.
 
+Transformed code is emitted **line-aligned**: every statement carrying a source location is placed on its original source line. Backtraces, failure messages, `break file:line` breakpoints, and debugger display are therefore correct by construction — no source maps, no backtrace filtering, no debugger integration required.
+
 ## Installation
 
 Add this line to your application's Gemfile:
@@ -160,6 +162,54 @@ In the above, `node#updated` allows updating the node, either its type or its ch
 
 The [ast gem](https://github.com/whitequark/ast) uses a pattern in which a Transformation may implement a method matching a node type, i.e. `on_class`, `on_send`, `on_lvar`, etc... This is very useful when transformations should process all nodes of this type.
 
+### Line-aligned emission and the authoring contract
+
+ASTTransform owns text and lines; transform authors own semantics and execution order. The contract:
+
+* A node **with** a source location is emitted at that location's line (the emitter pads with blank lines to reach it, and packs with `;` when a line is already occupied).
+* A node **without** a source location is synthetic: it packs onto the current line and inherits its neighbors' line number.
+* Textual order is source order. If your transform needs code to *execute* in a different order than it *appears*, use a thunk (below) instead of moving nodes.
+
+`ASTTransform::TransformationHelper` (included by `AbstractTransformation`) provides the authoring toolkit:
+
+* `s(type, *children)` — builds a loc-less (synthetic) node. Registered custom types (see below) construct their registered class.
+* `s_at(anchor, type, *children)` — builds a node anchored at `anchor`'s source location, so it is emitted at `anchor`'s line. Raises `TransformationHelper::MissingLocationError` if the anchor has no location.
+* `thunk(*statements)` — wraps statements in a single `Thunk` node: splice it wherever the statements must *run*, in statement position or composed inside an expression (e.g. an `assert_raises` block body). The wrapped statements keep their own locations, and the lowering derives the hidden proc's textual placement from them — the body still emits on its source lines even though execution waits. Reuse the same node to execute one body from several points. Thunk construction is invariant-checked (`ArgumentError` on a missing id or empty body); a body whose source lines fall after its execution point fails lowering with `ThunkLowering::PlacementError` (a thunk can only delay execution, never text).
+* `run_after(statements, run:, after:)` — the paved road over `thunk`: returns a reordered copy of `statements` where the contiguous `run` executes after `after`, while remaining at its source position textually. Elements are matched by object identity.
+
+Thunked statements keep their original meaning as far as Ruby's closure semantics allow:
+
+* `return` still returns from the enclosing method — the hidden closure is a non-lambda proc, and the proc and its call always share one method activation (placements never cross a `def` boundary).
+* Locals assigned by the thunked statements stay method-scope: the lowering pre-declares each one (`result = result`) before the proc, so code after the execution point can read them. Before the thunk runs they are `nil` — exactly what an unexecuted assignment yields.
+* Jump keywords whose owner lies *outside* the thunked statements keep Ruby's native behavior: `break`/`retry` raise `LocalJumpError` at the jump's own source line, while `next`/`redo` silently end or restart the thunk body. ASTTransform does not validate this — what a transform surface allows users to thunk is the transform author's call.
+
+#### Gotcha: location-only rewrites are silently dropped
+
+`Parser::AST::Node#updated` returns `self` when the new children compare `==` to the old ones — and `AST::Node#==` ignores source locations. A `Processor` pass that replaces a node with an equal-valued one (e.g. the same call rebuilt loc-less, hoping to change its emitted line) is a no-op: every `node.updated(nil, process_all(node))` up the tree discards the replacement. Location is part of a node's *emission*, not its *value* — to change where a node emits, change what it is (`s_at` an anchored rebuild with different children), or restructure the parent explicitly rather than relying on `updated`.
+
+#### Custom node types (intermediate representation)
+
+Transformations that parse a DSL can build their own IR by registering node classes:
+
+```ruby
+class InteractionNode < ASTTransform::Node
+  register :my_interaction
+
+  def cardinality = children[0]
+end
+
+s(:my_interaction, ...) # => InteractionNode, with domain accessors
+```
+
+Custom node types are IR **between stages that understand them** — the stage that owns a type must lower it to plain Ruby nodes before emission. The emitter enforces this: any registered or `ast_`-prefixed type reaching emission raises `LineAlignedEmitter::UnloweredNodeTypeError`.
+
+#### Testing your transformation
+
+`require 'ast_transform/testing/assertions'` (test-only) provides `ASTTransform::Testing::Assertions`, a Minitest-flavored module to include in your test class:
+
+* `assert_line_aligned(source, *transformations)` — transforms `source` through the real pipeline and asserts every surviving statement is emitted at its source line.
+* `assert_backtrace_lines(source, path:, raise_at:)` — compiles and executes `source`, asserting the raw first backtrace frame cites `path:raise_at` with no filtering.
+
 ### Parameterizable transformations
 
 If you want your transformation to be customizable, accept the parameters in the constructor. The annotation can the be changed accordingly:
@@ -182,6 +232,8 @@ end
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+
+If you use the [d3mlabs dev tool](https://github.com/d3mlabs/dev), `dev up` provisions the pinned Ruby (see `.ruby-version`) with a per-project shadowenv, and `dev test` runs the suite — plain Bundler as above works just as well.
 
 To install this gem onto your local machine, run `bundle exec rake install`.
 

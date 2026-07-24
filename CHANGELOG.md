@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - Unreleased
+### Added
+- Line-aligned emission: transformed code is emitted with every loc-carrying statement on its original source line, making backtraces, breakpoints, and debugger display correct by construction (`LineAlignedEmitter`).
+- Authoring toolkit in `TransformationHelper`: `s_at` (loc-anchored node construction), `thunk` (a single invariant-checked `Thunk` node spliced at the execution point; the lowering derives the hidden proc's textual placement from the body's source locations), and `run_after` (sequence-level execution reordering that preserves textual/source order). Thunks lower to a non-lambda proc, so `return` still returns from the enclosing method, and locals assigned by thunked statements are pre-declared to stay method-scope. Reusing one thunk node executes its body from several points.
+- `ASTTransform::Node.register`: type-routed construction of custom IR node classes through `s`, with an emitter postcondition (`LineAlignedEmitter::UnloweredNodeTypeError`) rejecting custom types that were not lowered before emission.
+- `ast_transform/testing/assertions` (test-only): `assert_line_aligned` and `assert_backtrace_lines` for transform authors' suites.
+- Error types, each owned by its producer: `TransformationHelper::MissingLocationError`, `ThunkLowering::PlacementError`, `LineAlignedEmitter::UnloweredNodeTypeError`. Thunk construction invariants raise plain `ArgumentError`.
+
+### Removed
+- **Breaking:** `ASTTransform::SourceMap` and source-map registration. Line-aligned emission makes raw VM line numbers the source line numbers, so there is nothing left to map at display time.
+
+### Changed
+- **Breaking:** `Transformer#transform` and `#transform_file_source` emit line-aligned output (source-anchored layout, always newline-terminated) instead of Unparser's re-normalized formatting.
+- **Breaking:** dropped Ruby 3.2 support (EOL since March 2026); `required_ruby_version` is now `>= 3.3`.
+- Dependency floors now reflect reality: `unparser >= 0.8` (the emitter uses `static_local_variables:`, a 0.7 interface, and 0.8's prism-based round-trip verification is required for Ruby >= 3.4 syntax) and `parser >= 3.3` (unparser's own floor; the declared `>= 3.0` could never resolve lower).
+
 ## [0.1.4] 2019-06-20
 ### Fixed
 - Source mapping for transformations wrapping source nodes into virtual nodes now work.

@@ -1,0 +1,240 @@
+# frozen_string_literal: true
+
+require 'ast_transform/node'
+require 'ast_transform/thunk'
+require 'ast_transform/transformation_helper'
+
+module ASTTransform
+  # Lowers Thunk nodes into plain Ruby ahead of emission. Each unique thunk (grouped by id identity) becomes a
+  # hidden proc; each occurrence becomes the proc's call:
+  #
+  #   thunk placed at the execution point
+  #     => x = x; __ast_thunk_<n>__ = proc { body }   (at the body's source lines)
+  #        ...
+  #        __ast_thunk_<n>__.call                     (at the occurrence)
+  #
+  # Placement is inferred, not authored: the proc's text is inserted into the statement sequence enclosing the
+  # occurrence, positioned among its siblings by the body's first source line — the lines the author removed the
+  # statements from. A loc-less body has no textual home and packs immediately before its call. Placements never
+  # escape a scope boundary (def/class/module bodies absorb their own), because the hidden lvar must share the call's
+  # method activation; they DO escape block literals, which close over the defining scope.
+  #
+  # The closure is a non-lambda proc on purpose: `return` inside a proc returns from the method where the proc was
+  # defined, and placement and execution always share one method activation, so a thunked `return` keeps its original
+  # meaning. Jump keywords whose owner lies outside the body keep Ruby's native behavior (`break`/`retry` fail loudly,
+  # `next`/`redo` silently alter flow) — what a transform chooses to thunk is the transform author's call.
+  #
+  # The `x = x` pre-declarations cover every local the body assigns at method scope. A local first assigned inside a
+  # block literal is block-local, so without a textual method-scope assignment before the proc, thunked assignments
+  # would be invisible to the statements that read them after the execution point. Self-assignment registers the name
+  # (nil until the thunk runs — exactly what an unexecuted assignment yields) without clobbering an already-assigned
+  # value.
+  #
+  # Stateless: the thunks encountered during one lowering are tracked in a Registry created at +lower+ entry, so an
+  # instance is a reusable collaborator.
+  class ThunkLowering
+    include TransformationHelper
+
+    # A pending proc definition: +line+ is the body's first source line (nil for fully synthetic bodies),
+    # +statements+ the pre-declarations plus the proc assignment.
+    Placement = Struct.new(:line, :statements)
+
+    # Raised when a thunk cannot be placed: its body's source lines fall after the execution point (the hidden
+    # proc's text IS its assignment, so a call can never textually precede the body), or two occurrences of the
+    # same thunk carry diverging bodies.
+    class PlacementError < StandardError; end
+
+    # The thunks encountered during one lowering, keyed by identity: allocates each thunk's hidden lvar name
+    # on first occurrence and verifies later occurrences carry the same body.
+    class Registry
+      def initialize
+        @names_by_id = {}.compare_by_identity
+        @bodies_by_id = {}.compare_by_identity
+      end
+
+      def known?(id)
+        @names_by_id.key?(id)
+      end
+
+      # @return [Symbol] the hidden lvar name allocated for +id+.
+      def register(id, body)
+        name = :"__ast_thunk_#{@names_by_id.size + 1}__"
+        @names_by_id[id] = name
+        @bodies_by_id[id] = body
+        name
+      end
+
+      def name_for(id)
+        @names_by_id.fetch(id)
+      end
+
+      def verify_same_body!(id, body)
+        return if @bodies_by_id[id] == body
+
+        raise PlacementError,
+          'occurrences of one thunk carry diverging bodies; reuse the same thunk node to multiplex'
+      end
+
+      def hidden_names
+        @names_by_id.values
+      end
+    end
+    private_constant :Registry
+
+    SEQUENCE_TYPES = [:begin, :kwbegin].freeze
+    # Scope-opening containers: the hidden lvar cannot be referenced across these boundaries, so placements arising
+    # inside must land inside.
+    SCOPE_BODY_INDEXES = { def: 2, defs: 3, class: 2, module: 1, sclass: 1 }.freeze
+
+    # @param node [Parser::AST::Node] tree possibly containing Thunk nodes
+    # @return [Parser::AST::Node] tree with thunks lowered to plain Ruby
+    # @raise [PlacementError] when a thunk body's source lines fall after its execution point, or occurrences of
+    #   one thunk diverge
+    def lower(node)
+      lower_body(node, Registry.new)
+    end
+
+    private
+
+    # Lowers a node standing in statement-body position (a container's body or the root), absorbing any placements
+    # that arise within it.
+    def lower_body(node, registry)
+      return node unless node.is_a?(::Parser::AST::Node)
+      return lower_sequence(node, registry) if SEQUENCE_TYPES.include?(node.type)
+
+      lowered, placements = lower_expression(node, registry)
+      return lowered if placements.empty?
+
+      # A loc-less :begin in statement position; the emitter flattens it into the surrounding statement stream.
+      s(:begin, *placements.flat_map(&:statements), lowered)
+    end
+
+    # Lowers a statement sequence, inserting each placement among the statements by the body's source line.
+    def lower_sequence(node, registry)
+      statements = []
+
+      node.children.each_with_index do |child, index|
+        lowered, placements = lower_expression(child, registry)
+        placements.each do |placement|
+          check_placement_precedes_execution!(placement, child, node.children[(index + 1)..])
+          statements.insert(insertion_index(statements, placement), *placement.statements)
+        end
+        statements << lowered
+      end
+
+      node.updated(nil, statements)
+    end
+
+    # Lowers a node in expression position. Returns the lowered node and the placements that must be inserted into
+    # the enclosing statement sequence.
+    #
+    # @return [Array(Parser::AST::Node, Array<Placement>)]
+    def lower_expression(node, registry)
+      return [node, []] unless node.is_a?(::Parser::AST::Node)
+
+      case node.type
+      when :ast_thunk
+        lower_thunk(node, registry)
+      when *SEQUENCE_TYPES
+        [lower_sequence(node, registry), []]
+      when :ensure, :rescue
+        [node.updated(nil, node.children.map { |child| lower_body(child, registry) }), []]
+      when :resbody
+        exceptions, capture, body = node.children
+        [node.updated(nil, [exceptions, capture, lower_body(body, registry)]), []]
+      else
+        lower_generic(node, registry)
+      end
+    end
+
+    def lower_generic(node, registry)
+      scope_body_index = SCOPE_BODY_INDEXES[node.type]
+      pending = []
+
+      children = node.children.each_with_index.map do |child, index|
+        if index == scope_body_index
+          lower_body(child, registry)
+        else
+          lowered, placements = lower_expression(child, registry)
+          pending.concat(placements)
+          lowered
+        end
+      end
+
+      [node.updated(nil, children), pending]
+    end
+
+    # An occurrence of a thunk: the first occurrence of its id yields the placement; every occurrence yields the
+    # call.
+    def lower_thunk(node, registry)
+      id = node.id
+
+      if registry.known?(id)
+        registry.verify_same_body!(id, node.body)
+        return [call_node(id, registry), []]
+      end
+
+      name = registry.register(id, node.body)
+      lowered_body = lower_sequence(s(:begin, *node.body), registry)
+      placement = Placement.new(body_first_line(node.body), placement_statements(name, lowered_body, registry))
+      [call_node(id, registry), [placement]]
+    end
+
+    def call_node(id, registry)
+      s(:send, s(:lvar, registry.name_for(id)), :call)
+    end
+
+    def placement_statements(name, lowered_body, registry)
+      assignment = s(:lvasgn, name, s(:block, s(:send, nil, :proc), s(:args), lowered_body))
+      hidden_names = registry.hidden_names
+      pre_declared = method_scope_assignments(lowered_body).reject { |local| hidden_names.include?(local) }
+      pre_declared.map { |local| s(:lvasgn, local, s(:lvar, local)) } << assignment
+    end
+
+    def body_first_line(body)
+      body.filter_map { |statement| statement.loc&.line }.min
+    end
+
+    # The proc's text must precede its call: a placement whose body lines fall at or after the executing statement
+    # (or any statement after it) cannot be laid out — the assignment would complete after the call.
+    def check_placement_precedes_execution!(placement, executing_statement, following_statements)
+      return if placement.line.nil?
+
+      conflicting = [executing_statement, *following_statements].find do |statement|
+        line = statement.is_a?(::Parser::AST::Node) ? statement.loc&.line : nil
+        line && line < placement.line
+      end
+      return if conflicting.nil?
+
+      raise PlacementError,
+        "thunk body's source lines (from line #{placement.line}) fall after its execution point " \
+          "(statement at line #{conflicting.loc.line}); a thunk can only delay execution, never text"
+    end
+
+    def insertion_index(statements, placement)
+      return statements.size if placement.line.nil?
+
+      statements.index { |statement| statement.loc&.line && statement.loc.line > placement.line } || statements.size
+    end
+
+    # Node types opening a new local-variable scope: assignments inside them were invisible to the method scope in
+    # the original source too, so they get no pre-declaration.
+    NEW_SCOPE_TYPES = [:def, :defs, :class, :module, :sclass].freeze
+    # Block literals: locals first assigned inside them are block-local (the same lexical rule the pre-declarations
+    # exist to work around), but their callee/arguments evaluate at method scope and are still descended.
+    BLOCK_TYPES = [:block, :numblock, :itblock].freeze
+
+    # Locals the thunk body assigns at method scope, in first-assignment order (covers masgn/op_asgn targets — they
+    # all carry :lvasgn nodes).
+    def method_scope_assignments(node, names = [])
+      return names unless node.is_a?(::Parser::AST::Node)
+      return names if NEW_SCOPE_TYPES.include?(node.type)
+
+      names << node.children[0] if node.type == :lvasgn && !names.include?(node.children[0])
+
+      children = BLOCK_TYPES.include?(node.type) ? [node.children[0]] : node.children
+      children.each { |child| method_scope_assignments(child, names) }
+      names
+    end
+  end
+end
