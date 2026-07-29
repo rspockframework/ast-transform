@@ -11,10 +11,10 @@ module ASTTransform
   class SourceParser
     # Constructs a new SourceParser instance.
     #
-    # @param builder [Prism::Translation::Parser::Builder] The node builder handed to every parser. Fixed for this
-    # instance's lifetime; the framework's default preserves the kwargs/hash distinction Unparser needs.
-    def initialize(builder: KwargsBuilder.new)
-      @builder = builder
+    # KwargsBuilder is a required implementation detail, not an injection seam: the framework's emission depends
+    # on the kwargs/hash distinction it preserves, so every parse goes through it.
+    def initialize
+      @builder = KwargsBuilder.new
     end
 
     # Parses the given +source+.
