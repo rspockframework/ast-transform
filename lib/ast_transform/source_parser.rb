@@ -9,6 +9,14 @@ module ASTTransform
   # node vocabulary Parser::AST::Processor understands. Transformer parses through this seam; analysis-only
   # consumers that never emit instantiate it directly and keep the instance for as many parses as they need.
   class SourceParser
+    # Constructs a new SourceParser instance.
+    #
+    # @param builder [Prism::Translation::Parser::Builder] The node builder handed to every parser. Fixed for this
+    # instance's lifetime; the framework's default preserves the kwargs/hash distinction Unparser needs.
+    def initialize(builder: KwargsBuilder.new)
+      @builder = builder
+    end
+
     # Parses the given +source+.
     #
     # @param source [String] The input source code.
@@ -17,8 +25,10 @@ module ASTTransform
     #
     # @return [Parser::AST::Node] The AST.
     def parse(source, file_path: "tmp")
-      buffer = create_buffer(source, file_path)
-      parser.parse(buffer)
+      # A fresh parser per parse: parser instances accumulate per-run state (lexer position, diagnostics), and
+      # constructing one is trivial next to the parse itself.
+      parser = Prism::Translation::Parser.new(@builder)
+      parser.parse(create_buffer(source, file_path, parser.default_encoding))
     end
 
     # Parses the source in the given +file_path+.
@@ -32,25 +42,18 @@ module ASTTransform
 
     private
 
-    # Builds a source buffer over +source+ in the parser's default encoding.
+    # Builds a source buffer over +source+ in the given +encoding+.
     #
     # @param source [String] The input source code.
     # @param file_path [String] The file path recorded on the buffer.
+    # @param encoding [Encoding] The encoding the buffer's source is coerced to.
     #
     # @return [Parser::Source::Buffer] The buffer.
-    def create_buffer(source, file_path)
+    def create_buffer(source, file_path, encoding)
       buffer = Parser::Source::Buffer.new(file_path)
-      buffer.source = source.dup.force_encoding(parser.default_encoding)
+      buffer.source = source.dup.force_encoding(encoding)
 
       buffer
-    end
-
-    # The memoized parser, reset between parses.
-    #
-    # @return [Prism::Translation::Parser] The parser.
-    def parser
-      @parser&.reset
-      @parser ||= Prism::Translation::Parser.new(ASTTransform::KwargsBuilder.new)
     end
   end
 end
