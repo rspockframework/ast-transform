@@ -130,6 +130,16 @@ class MyTransformation < ASTTransformation::AbstractTransformation
 end
 ```
 
+#### Choosing a pass shape
+
+Passes come in three shapes, distinguished by how the rewrite site is found:
+
+* **Structural** — the pattern alone identifies the site. Subclass `AbstractTransformation` and write `on_*` handlers; the pass rewrites the pattern wherever it occurs in the tree.
+* **Positional (node builders)** — the *caller* owns traversal and has already located the site. Implement a plain `run(node) → node` object (include `TransformationHelper` for the `s(...)` vocabulary); the builder maps a single node to its replacement subtree and never walks. Anything with that duck type composes with `Transformer` and other passes.
+* **Sibling-annotation** — the pattern is a marker statement plus its NEXT sibling. Match in `process_node`, where a node's child list is visible: an `on_*` handler sees one node, never its siblings, and cannot delete itself from its parent. `ASTTransform::Transformation` (the `transform!` detector) is the canonical example.
+
+For read-only passes that harvest information instead of rewriting, see [Analysis passes](#analysis-passes).
+
 #### Transformation discoverability
 
 ASTTransform automatically loads your transformations at compile time. As such, we expect your files to be located at a known path.
@@ -161,6 +171,46 @@ In the above, `node#updated` allows updating the node, either its type or its ch
 #### Processing on certain types of nodes only
 
 The [ast gem](https://github.com/whitequark/ast) uses a pattern in which a Transformation may implement a method matching a node type, i.e. `on_class`, `on_send`, `on_lvar`, etc... This is very useful when transformations should process all nodes of this type.
+
+### Analysis passes
+
+Not every pass rewrites. An analysis walks the tree and harvests information — `Parser::AST::Processor` has no read-only mode (every walk functionally rebuilds the tree), so an analysis is simply a walk whose rebuilt tree is discarded. Derive from `ASTTransform::AbstractAnalysis`: it shares the traversal engine with `AbstractTransformation` (including thunk descent and the `s(...)` matching vocabulary) and differs only in what `run` returns — the analysis instance, so callers chain result readers off the run.
+
+```ruby
+require 'ast_transform/abstract_analysis'
+
+class TypeAliasRanges < ASTTransform::AbstractAnalysis
+  attr_reader :ranges
+
+  def initialize
+    @ranges = []
+    super
+  end
+
+  def on_block(node)
+    send_node = node.children.first
+    @ranges << (node.loc.expression.first_line..node.loc.expression.last_line) if type_alias?(send_node)
+    super
+  end
+
+  private
+
+  def type_alias?(send_node)
+    send_node == s(:send, s(:const, nil, :T), :type_alias)
+  end
+end
+```
+
+Harvest state in `on_*` handlers and always call `super` so traversal continues. Node equality ignores source locations, so `s(...)` patterns match structurally.
+
+Analysis-only consumers don't need a `Transformer`; parse directly through the shared seam:
+
+```ruby
+ASTTransform.parse(source)          # => Parser::AST::Node
+ASTTransform.parse_file(file_path)  # => Parser::AST::Node
+
+TypeAliasRanges.new.run(ASTTransform.parse(source)).ranges
+```
 
 ### Line-aligned emission and the authoring contract
 

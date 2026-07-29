@@ -6,6 +6,11 @@ require "ast_transform/transformer"
 require "unparser"
 
 module ASTTransform
+  # The +transform!+ detector — the canonical sibling-annotation pass (see AbstractTransformation for the taxonomy).
+  # A +transform!(...)+ statement is a pragma on the NEXT sibling: the transformations it names are applied to the
+  # following class definition or constant assignment, and the marker itself is deleted from the child list. Both
+  # effects need the parent's child list in view, which is why matching happens in +process_node+ — an +on_send+
+  # handler would see the marker node alone, with no access to its next sibling and no way to remove itself.
   class Transformation < ASTTransform::AbstractTransformation
     TRANSFORM_AST = s(:send, nil, :transform!)
 
