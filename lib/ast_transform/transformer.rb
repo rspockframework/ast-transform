@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
-require 'prism'
-require 'prism/translation/parser'
-require 'unparser'
-require 'ast_transform/kwargs_builder'
 require 'ast_transform/line_aligned_emitter'
+require 'ast_transform/source_parser'
 
 module ASTTransform
   class Transformer
@@ -15,6 +12,7 @@ module ASTTransform
     def initialize(*transformations, emitter: LineAlignedEmitter.new)
       @transformations = transformations
       @emitter = emitter
+      @source_parser = SourceParser.new
     end
 
     # Builds the AST for the given +source+.
@@ -24,8 +22,7 @@ module ASTTransform
     #
     # @return [Parser::AST::Node] The AST.
     def build_ast(source, file_path: "tmp")
-      buffer = create_buffer(source, file_path)
-      parser.parse(buffer)
+      @source_parser.parse(source, file_path: file_path)
     end
 
     # Builds the AST for the given +file_path+.
@@ -34,8 +31,7 @@ module ASTTransform
     #
     # @return [Parser::AST::Node] The AST.
     def build_ast_from_file(file_path)
-      source = File.read(file_path)
-      build_ast(source, file_path: file_path)
+      @source_parser.parse_file(file_path)
     end
 
     # Transforms the given +source+.
@@ -88,20 +84,6 @@ module ASTTransform
       @transformations.inject(ast) do |ast, transformation|
         transformation.run(ast)
       end
-    end
-
-    private
-
-    def create_buffer(source, file_path)
-      buffer = Parser::Source::Buffer.new(file_path)
-      buffer.source = source.dup.force_encoding(parser.default_encoding)
-
-      buffer
-    end
-
-    def parser
-      @parser&.reset
-      @parser ||= Prism::Translation::Parser.new(ASTTransform::KwargsBuilder.new)
     end
   end
 end
