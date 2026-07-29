@@ -30,7 +30,7 @@ module ASTTransform
     end
 
     test "#run harvests from every matching node in the tree" do
-      ast = ASTTransform.parse(<<~CODE)
+      ast = ASTTransform::SourceParser.new.parse(<<~CODE)
         foo
         bar(baz)
       CODE
@@ -52,10 +52,11 @@ module ASTTransform
     end
 
     test "#run leaves the analyzed tree equal to a fresh parse" do
-      ast = ASTTransform.parse("foo(bar)")
+      source_parser = ASTTransform::SourceParser.new
+      ast = source_parser.parse("foo(bar)")
       SendNameCollector.new.run(ast)
 
-      assert_equal ASTTransform.parse("foo(bar)"), ast
+      assert_equal source_parser.parse("foo(bar)"), ast
     end
   end
 end

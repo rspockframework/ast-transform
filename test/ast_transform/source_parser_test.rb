@@ -40,18 +40,5 @@ module ASTTransform
         assert_equal file_path, ast.loc.expression.source_buffer.name
       end
     end
-
-    test "ASTTransform.parse parses through the shared seam" do
-      assert_equal s(:send, nil, :method_call), ASTTransform.parse("method_call")
-    end
-
-    test "ASTTransform.parse_file parses the file's source" do
-      Dir.mktmpdir do |dir|
-        file_path = File.join(dir, "input.rb")
-        File.write(file_path, "method_call\n")
-
-        assert_equal s(:send, nil, :method_call), ASTTransform.parse_file(file_path)
-      end
-    end
   end
 end

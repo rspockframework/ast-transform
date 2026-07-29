@@ -6,8 +6,8 @@ require "ast_transform/kwargs_builder"
 
 module ASTTransform
   # Owns source → AST parsing: Prism's C parser through its whitequark translation layer, so every consumer gets the
-  # node vocabulary Parser::AST::Processor understands. Transformer parses through this seam, and ASTTransform.parse
-  # exposes it to analysis-only consumers that never emit.
+  # node vocabulary Parser::AST::Processor understands. Transformer parses through this seam; analysis-only
+  # consumers that never emit instantiate it directly and keep the instance for as many parses as they need.
   class SourceParser
     # Parses the given +source+.
     #

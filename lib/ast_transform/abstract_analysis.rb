@@ -22,7 +22,7 @@ module ASTTransform
   #     end
   #   end
   #
-  #   SendCounter.new.run(ASTTransform.parse(source)).count
+  #   SendCounter.new.run(SourceParser.new.parse(source)).count
   class AbstractAnalysis < AbstractProcessor
     # Runs this analysis on +node+, discarding the rebuilt tree.
     # Note: If you want to add one-time setup or result finalization, override this, then call super.

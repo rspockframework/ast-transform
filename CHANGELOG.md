@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.1.0] - 2026-07-29
 ### Added
 - Analysis passes: `ASTTransform::AbstractAnalysis`, the read-only counterpart of `AbstractTransformation`. Both leaves share the extracted traversal core `ASTTransform::AbstractProcessor` (sealed `process`, `process_node` hook, thunk descent, `TransformationHelper`) and differ only in what `run` returns — the rebuilt tree for transformations, the analysis instance (result readers) for analyses.
-- Public parse entry: `ASTTransform.parse(source, file_path:)` / `ASTTransform.parse_file(path)` expose the framework's Prism-backed parsing to analysis-only consumers that never emit. `ASTTransform::SourceParser` owns the parsing seam; `Transformer#build_ast` / `#build_ast_from_file` delegate to it (unchanged public behavior).
+- Public parse seam: `ASTTransform::SourceParser` (`#parse(source, file_path:)` / `#parse_file(path)`) extracts the framework's Prism-backed parsing from `Transformer` so analysis-only consumers that never emit can instantiate it directly. `Transformer#build_ast` / `#build_ast_from_file` delegate to it (unchanged public behavior).
 - Pass-taxonomy documentation on `AbstractTransformation`, `Transformation`, and the README: structural (`on_*` handlers, pattern matched anywhere), positional (node builders with the bare `run(node) → node` duck type, caller owns traversal), and sibling-annotation (marker statement + next sibling, matched in `process_node` where the child list is visible — `transform!` itself).
 
 ## [3.0.0] - 2026-07-24

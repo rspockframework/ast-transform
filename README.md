@@ -203,13 +203,15 @@ end
 
 Harvest state in `on_*` handlers and always call `super` so traversal continues. Node equality ignores source locations, so `s(...)` patterns match structurally.
 
-Analysis-only consumers don't need a `Transformer`; parse directly through the shared seam:
+Analysis-only consumers don't need a `Transformer`; instantiate the parsing seam directly (`Transformer` uses the same class internally) and keep the instance for as many parses as you need:
 
 ```ruby
-ASTTransform.parse(source)          # => Parser::AST::Node
-ASTTransform.parse_file(file_path)  # => Parser::AST::Node
+parser = ASTTransform::SourceParser.new
 
-TypeAliasRanges.new.run(ASTTransform.parse(source)).ranges
+parser.parse(source)          # => Parser::AST::Node
+parser.parse_file(file_path)  # => Parser::AST::Node
+
+TypeAliasRanges.new.run(parser.parse(source)).ranges
 ```
 
 ### Line-aligned emission and the authoring contract
