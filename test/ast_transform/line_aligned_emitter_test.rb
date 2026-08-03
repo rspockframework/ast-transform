@@ -292,6 +292,26 @@ module ASTTransform
       RUBY
     end
 
+    # This dstr fails Unparser's quoted-string round-trip and re-renders as `<<-HEREDOC` form — three lines
+    # tall from a one-line source, displacing every following placement into packing mode (issue #16).
+    HEREDOC_FALLBACK_SOURCE = <<~'RUBY'
+      def write_learning(dir, slug, index_domain: "tooling")
+        line = "- [#{index_domain}/#{slug}] The #{slug} cue. → .cursor/skills/learnings/#{slug}/\n"
+        File.open(File.join(dir, INDEX), "a") { |index| index.write(line) }
+      end
+    RUBY
+
+    test "a render in heredoc form is line-terminal: displaced statements and closers never pack onto its terminator" do
+      emitted = emit(parse(HEREDOC_FALLBACK_SOURCE))
+
+      # Before the fix this was `HEREDOC; File.open(...); end` — an unterminated heredoc swallowing the file.
+      RubyVM::InstructionSequence.compile(emitted)
+      terminator_line = emitted.split("\n").find { |line| line.start_with?('HEREDOC') }
+
+      assert_equal 'HEREDOC', terminator_line
+      assert_includes emitted, 'File.open'
+    end
+
     test "a thunk inside a def stays inside the def (scope boundary)" do
       def_node = parse("def run\n  helper\nend\n")
       name, args, body = def_node.children

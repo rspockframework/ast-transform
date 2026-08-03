@@ -71,7 +71,9 @@ module ASTTransform
       if recursive_container?(node)
         emit_container(node, layout, renderer)
       else
-        layout.place(node.loc&.line, renderer.aligned_render(node), column: node.loc&.column)
+        render = renderer.aligned_render(node)
+        # A render in heredoc form seals its line: nothing may pack after the terminator (issue #16).
+        layout.place(node.loc&.line, render, column: node.loc&.column, seal: renderer.line_terminal?(render))
       end
     end
 
@@ -145,7 +147,8 @@ module ASTTransform
     # nested statements align.
     def emit_container(node, layout, renderer)
       opener, closer = container_delimiters(node, renderer)
-      layout.place(node.loc&.line, opener, column: node.loc&.column)
+      # An opener can carry a heredoc too (e.g. a block call with a heredoc argument) — seal it like a statement.
+      layout.place(node.loc&.line, opener, column: node.loc&.column, seal: renderer.line_terminal?(opener))
       emit_body(container_body(node), layout, renderer)
       layout.place(closer_line(node), closer, column: closer_column(node))
     end

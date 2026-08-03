@@ -71,6 +71,31 @@ module ASTTransform
       assert_equal "statement\nensure\n", layout.to_source
     end
 
+    test "a sealed placement forces the next pack onto a fresh line" do
+      layout = Layout.new
+      layout.place(1, "value = <<-EOS\nbody\nEOS", seal: true)
+      layout.place(2, 'displaced')
+
+      assert_equal "value = <<-EOS\nbody\nEOS\ndisplaced\n", layout.to_source
+    end
+
+    test "the seal covers one pack: packing resumes on the fallback line" do
+      layout = Layout.new
+      layout.place(1, 'terminal', seal: true)
+      layout.place(1, 'first_displaced')
+      layout.place(1, 'second_displaced')
+
+      assert_equal "terminal\nfirst_displaced; second_displaced\n", layout.to_source
+    end
+
+    test "padding to a line ahead is unaffected by the seal" do
+      layout = Layout.new
+      layout.place(1, 'terminal', seal: true)
+      layout.place(3, 'ahead')
+
+      assert_equal "terminal\n\nahead\n", layout.to_source
+    end
+
     test "pack onto an empty layout opens the first line" do
       layout = Layout.new
       layout.pack('lonely')
