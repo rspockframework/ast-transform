@@ -62,7 +62,29 @@ module ASTTransform
       compress_to_single_line(render) || render
     end
 
+    # Whether +render+ must be the last text on its final line: a render ending on a heredoc terminator (Unparser
+    # falls back to `<<-HEREDOC` form when its quoted-string round-trip fails) cannot have anything `;`-packed
+    # after it — the terminator must stand alone, so a join unterminates the heredoc. Probed by re-parse, the same
+    # verification style as +compress_to_single_line+, behind a cheap textual gate: only a heredoc makes a last
+    # line unextendable, and every heredoc opener contains +<<+. A false positive (the probe failing for another
+    # reason, e.g. an isolated container opener carrying a heredoc argument) costs one line of alignment, never
+    # correctness.
+    def line_terminal?(render)
+      return false unless render.include?('<<')
+
+      # chomp: heredoc renders end with a trailing newline; the probe must extend the last *line* (where the
+      # layout would pack), not append below it.
+      !parses?("#{render.chomp}; nil")
+    end
+
     private
+
+    def parses?(source)
+      Unparser.parse(source)
+      true
+    rescue Parser::SyntaxError
+      false
+    end
 
     def compress_to_single_line(render)
       candidate = render.split("\n").map(&:strip).join('; ')

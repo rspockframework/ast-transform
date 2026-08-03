@@ -49,6 +49,23 @@ module ASTTransform
       assert_nil renderer.send(:compress_to_single_line, "value = <<~TXT\n  hi\nTXT")
     end
 
+    test "line_terminal? flags a render ending on a heredoc terminator" do
+      renderer = StatementRenderer.for_tree(parse("noop\n"))
+
+      assert renderer.line_terminal?("value = <<-HEREDOC\nbody\nHEREDOC")
+    end
+
+    test "line_terminal? passes renders whose last line can be extended" do
+      renderer = StatementRenderer.for_tree(parse("noop\n"))
+
+      refute renderer.line_terminal?('value = 1')
+      # `<<` appears without opening a heredoc: the shovel operator, and heredoc-looking text inside a string.
+      refute renderer.line_terminal?('queue << item')
+      refute renderer.line_terminal?('value = "<<-EOS"')
+      # A quoted multi-line string's last line closes the literal and stays extendable.
+      refute renderer.line_terminal?("value = \"a\nb\"")
+    end
+
     test "for_tree collects assignments and every parameter flavor" do
       tree = parse(<<~HEREDOC)
         assigned = 1
