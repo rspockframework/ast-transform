@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- One-parameter blocks no longer auto-splat their argument after transformation: `[[1, 2]].each { |a| }` emitted as `{ |a,| }` (the trailing-comma form), so `a` saw `1` instead of `[1, 2]`. The parser builder opted into `emit_kwargs` alone and otherwise produced the parser gem's legacy AST, in which a lone `s(:arg)` under `s(:args)` is what Unparser (written against the modern AST) reads as `|a,|`. Lambdas were affected the same way (`->(a) {}` emitted as `lambda { |a,| }`), and forwarding defs lost their header (`def m(...)` emitted as `def m`). (#21)
+
+### Changed
+- `ASTTransform::KwargsBuilder` is now `ASTTransform::ModernBuilder` and opts into the parser gem's full `modernize` set rather than `emit_kwargs` alone. Transformations and analyses now see the modern node shapes: `s(:args, s(:procarg0, s(:arg, :a)))` for `|a|`, `:index`/`:indexasgn` for `foo[1]`/`foo[1] = 2` (previously `:send` with `:[]`/`:[]=`), `:lambda` for `->() {}` (previously `s(:send, nil, :lambda)`), `s(:args, s(:forward_arg))` for `def m(...)` (previously `:forward_args`), plus `:match_pattern`/`:match_pattern_p` for `x => a`/`x in a`, `:kwargs` (unchanged), and `s(:__ENCODING__)` for `__ENCODING__`. Passes that pattern-match the legacy shapes must update.
+
+## [3.1.1] - 2026-08-03
+### Fixed
+- Line-aligned emission no longer packs displaced statements or container closers onto a heredoc terminator line. Unparser legitimately falls back to `<<-HEREDOC` emission when a dstr fails its quoted-string round-trip; the emitter now treats such a render as line-terminal and opens a fresh line instead, trading one line of alignment for valid Ruby. (#16)
+
 ## [3.1.0] - 2026-07-29
 ### Added
 - Analysis passes: `ASTTransform::AbstractAnalysis`, the read-only counterpart of `AbstractTransformation`. Both leaves share the extracted traversal core `ASTTransform::AbstractProcessor` (sealed `process`, `process_node` hook, thunk descent, `TransformationHelper`) and differ only in what `run` returns — the rebuilt tree for transformations, the analysis instance (result readers) for analyses.

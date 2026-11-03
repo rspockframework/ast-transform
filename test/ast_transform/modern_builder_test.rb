@@ -1,15 +1,46 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "ast_transform/kwargs_builder"
+require "ast_transform/transformation_helper"
+require "ast_transform/modern_builder"
 
 module ASTTransform
-  class KwargsBuilderTest < Minitest::Test
+  class ModernBuilderTest < Minitest::Test
     extend ASTTransform::Declarative
+    include ASTTransform::TransformationHelper
 
     def setup
-      @builder = ASTTransform::KwargsBuilder.new
+      @builder = ASTTransform::ModernBuilder.new
       @parser = Prism::Translation::Parser.new(@builder)
+    end
+
+    test "#args wraps a lone block parameter in :procarg0 (non-splatting `|a|`)" do
+      block_args = find_node(parse("x { |a| a }"), :args)
+
+      # Legacy shape s(:args, s(:arg, :a)) means the trailing-comma form `|a,|` to Unparser, which auto-splats.
+      assert_equal s(:args, s(:procarg0, s(:arg, :a))), block_args
+    end
+
+    test "#args keeps the trailing-comma block parameter as a bare :arg" do
+      block_args = find_node(parse("x { |a,| a }"), :args)
+
+      assert_equal s(:args, s(:arg, :a)), block_args
+    end
+
+    test "#block emits :lambda for the stabby lambda literal" do
+      refute_nil find_node(parse("->(a) { a }"), :lambda)
+    end
+
+    test "#index emits :index and :indexasgn for subscript access" do
+      refute_nil find_node(parse("foo[1]"), :index)
+      refute_nil find_node(parse("foo[1] = 2"), :indexasgn)
+    end
+
+    test "#forward_arg emits :forward_arg inside :args for a forwarding def" do
+      def_args = parse("def m(...) = n(...)").children[1]
+
+      # The legacy shape replaces :args wholesale with :forward_args, which Unparser does not emit as `(...)`.
+      assert_equal s(:args, s(:forward_arg)), def_args
     end
 
     test "#associate emits :kwargs for bare keyword arguments" do
