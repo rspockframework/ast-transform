@@ -14,27 +14,26 @@ module ASTTransform
       @parser = Prism::Translation::Parser.new(@builder)
     end
 
-    MODERNIZE_FLAGS = [
-      :emit_lambda,
-      :emit_procarg0,
-      :emit_encoding,
-      :emit_index,
-      :emit_arg_inside_procarg0,
-      :emit_forward_arg,
-      :emit_kwargs,
-      :emit_match_pattern,
-    ].freeze
-
     test "opts into every modernize flag" do
-      MODERNIZE_FLAGS.each do |flag|
-        assert ASTTransform::ModernBuilder.public_send(flag), "expected #{flag} to be on"
-      end
+      assert ASTTransform::ModernBuilder.emit_lambda
+      assert ASTTransform::ModernBuilder.emit_procarg0
+      assert ASTTransform::ModernBuilder.emit_encoding
+      assert ASTTransform::ModernBuilder.emit_index
+      assert ASTTransform::ModernBuilder.emit_arg_inside_procarg0
+      assert ASTTransform::ModernBuilder.emit_forward_arg
+      assert ASTTransform::ModernBuilder.emit_kwargs
+      assert ASTTransform::ModernBuilder.emit_match_pattern
     end
 
     test "leaves the global default builder's flags untouched" do
-      MODERNIZE_FLAGS.each do |flag|
-        refute Parser::Builders::Default.public_send(flag), "expected #{flag} to stay off on the global default"
-      end
+      refute Parser::Builders::Default.emit_lambda
+      refute Parser::Builders::Default.emit_procarg0
+      refute Parser::Builders::Default.emit_encoding
+      refute Parser::Builders::Default.emit_index
+      refute Parser::Builders::Default.emit_arg_inside_procarg0
+      refute Parser::Builders::Default.emit_forward_arg
+      refute Parser::Builders::Default.emit_kwargs
+      refute Parser::Builders::Default.emit_match_pattern
     end
 
     test "#args wraps a lone block parameter in :procarg0 (non-splatting `|a|`)" do
