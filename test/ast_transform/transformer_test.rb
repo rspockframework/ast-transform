@@ -82,6 +82,37 @@ module ASTTransform
       assert_equal "foo_bar\n", @multi_transformer.transform(@source)
     end
 
+    test "#transform emits a one-parameter block without a trailing comma" do
+      # `|a,|` would be the auto-splatting form (#21).
+      assert_equal "x { |a|; a; }\n", @transformer.transform("x { |a| a }\n")
+    end
+
+    test "#transform emits a one-parameter lambda literal without a trailing comma" do
+      assert_equal "->(a) do; a; end\n", @transformer.transform("->(a) { a }\n")
+    end
+
+    test "#transform round-trips a forwarding def header" do
+      source = <<~RUBY
+        def m(...)
+          n(...)
+        end
+      RUBY
+
+      # The legacy :forward_args shape lost the `(...)` on the def line.
+      assert_equal source, @transformer.transform(source)
+    end
+
+    test "#transform preserves the arity of a one-parameter block" do
+      source = <<~RUBY
+        seen = []
+        [[1, 2]].each { |a| seen << a }
+        seen
+      RUBY
+
+      # Auto-splatting would see 1, not [1, 2].
+      assert_equal [[1, 2]], Module.new.module_eval(@transformer.transform(source), "fixture.rb", 1)
+    end
+
     test "#transform_file returns the expected transformed code" do
       pathname = Pathname.new("").join("tmp", "test", "ast_transform", "transformer_test.rb")
       transformed_pathname = Pathname.new("").join("tmp", "test", "ast_transform", "transformed_transformer_test.rb")

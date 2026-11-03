@@ -2,7 +2,7 @@
 
 require "prism"
 require "prism/translation/parser"
-require "ast_transform/kwargs_builder"
+require "ast_transform/modern_builder"
 
 module ASTTransform
   # Owns source → AST parsing: Prism's C parser through its whitequark translation layer, so every consumer gets the
@@ -11,10 +11,10 @@ module ASTTransform
   class SourceParser
     # Constructs a new SourceParser instance.
     #
-    # KwargsBuilder is a required implementation detail, not an injection seam: the framework's emission depends
-    # on the kwargs/hash distinction it preserves, so every parse goes through it.
+    # ModernBuilder is a required implementation detail, not an injection seam: the framework's emission depends
+    # on the modern AST shapes it produces, so every parse goes through it.
     def initialize
-      @builder = KwargsBuilder.new
+      @builder = ModernBuilder.new
     end
 
     # Parses the given +source+.

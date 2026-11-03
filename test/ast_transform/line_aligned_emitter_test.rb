@@ -197,8 +197,8 @@ module ASTTransform
       # method scope. inner does not: it is first assigned inside the block, so it was block-local in the original
       # source too.
       assert_equal <<~RUBY, emitted
-        outer = outer; width = width; __ast_thunk_1__ = proc do; outer = items.map { |item,|; inner = item; }
-        buffer.take(width = limit) { |line,|; sink(line); }; end; __ast_thunk_1__.call
+        outer = outer; width = width; __ast_thunk_1__ = proc do; outer = items.map { |item|; inner = item; }
+        buffer.take(width = limit) { |line|; sink(line); }; end; __ast_thunk_1__.call
       RUBY
     end
 
