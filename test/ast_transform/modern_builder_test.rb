@@ -15,25 +15,25 @@ module ASTTransform
     end
 
     test "opts into every modernize flag" do
-      assert ASTTransform::ModernBuilder.emit_lambda
-      assert ASTTransform::ModernBuilder.emit_procarg0
-      assert ASTTransform::ModernBuilder.emit_encoding
-      assert ASTTransform::ModernBuilder.emit_index
-      assert ASTTransform::ModernBuilder.emit_arg_inside_procarg0
-      assert ASTTransform::ModernBuilder.emit_forward_arg
-      assert ASTTransform::ModernBuilder.emit_kwargs
-      assert ASTTransform::ModernBuilder.emit_match_pattern
+      assert_equal true, ASTTransform::ModernBuilder.emit_lambda
+      assert_equal true, ASTTransform::ModernBuilder.emit_procarg0
+      assert_equal true, ASTTransform::ModernBuilder.emit_encoding
+      assert_equal true, ASTTransform::ModernBuilder.emit_index
+      assert_equal true, ASTTransform::ModernBuilder.emit_arg_inside_procarg0
+      assert_equal true, ASTTransform::ModernBuilder.emit_forward_arg
+      assert_equal true, ASTTransform::ModernBuilder.emit_kwargs
+      assert_equal true, ASTTransform::ModernBuilder.emit_match_pattern
     end
 
     test "leaves the global default builder's flags untouched" do
-      refute Parser::Builders::Default.emit_lambda
-      refute Parser::Builders::Default.emit_procarg0
-      refute Parser::Builders::Default.emit_encoding
-      refute Parser::Builders::Default.emit_index
-      refute Parser::Builders::Default.emit_arg_inside_procarg0
-      refute Parser::Builders::Default.emit_forward_arg
-      refute Parser::Builders::Default.emit_kwargs
-      refute Parser::Builders::Default.emit_match_pattern
+      assert_equal false, Parser::Builders::Default.emit_lambda
+      assert_equal false, Parser::Builders::Default.emit_procarg0
+      assert_equal false, Parser::Builders::Default.emit_encoding
+      assert_equal false, Parser::Builders::Default.emit_index
+      assert_equal false, Parser::Builders::Default.emit_arg_inside_procarg0
+      assert_equal false, Parser::Builders::Default.emit_forward_arg
+      assert_equal false, Parser::Builders::Default.emit_kwargs
+      assert_equal false, Parser::Builders::Default.emit_match_pattern
     end
 
     test "#args wraps a lone block parameter in :procarg0 (non-splatting `|a|`)" do
