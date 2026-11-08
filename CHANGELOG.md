@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [3.2.0] - 2026-11-08
 ### Fixed
 - One-parameter blocks no longer auto-splat their argument after transformation: `[[1, 2]].each { |a| }` emitted as `{ |a,| }` (the trailing-comma form), so `a` saw `1` instead of `[1, 2]`. The parser builder opted into `emit_kwargs` alone and otherwise produced the parser gem's legacy AST, in which a lone `s(:arg)` under `s(:args)` is what Unparser (written against the modern AST) reads as `|a,|`. Lambdas were affected the same way (`->(a) {}` emitted as `lambda { |a,| }`), and forwarding defs lost their header (`def m(...)` emitted as `def m`). (#21)
 
