@@ -1,3 +1,4 @@
+# typed: false
 # frozen_string_literal: true
 
 require 'test_helper'
@@ -13,7 +14,9 @@ module ASTTransform
     class RegisteredNode < ASTTransform::Node
       register :ast_transform_test_registered
 
-      def payload = children[0]
+      def payload
+        children[0]
+      end
     end
 
     def parse(source)

@@ -1,5 +1,4 @@
+# The org tier: rubocop-shopify + rubocop-sorbet, every file carries a
+# `typed:` sigil, no endless defs, RSpock test-dialect exclusions.
 inherit_gem:
-  rubocop-shopify: rubocop.yml
-
-AllCops:
-  SuggestExtensions: false
+  rubocop-d3mlabs: rubocop.yml

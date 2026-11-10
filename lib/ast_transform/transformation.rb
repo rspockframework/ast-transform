@@ -1,3 +1,4 @@
+# typed: false
 # frozen_string_literal: true
 
 require "ast_transform"
@@ -112,7 +113,9 @@ module ASTTransform
     end
 
     def try_const_get(const_name)
-      Object.const_get(const_name)
+      # The constant's name comes from the source being transformed; resolving
+      # it dynamically is the operation, not a shortcut around one.
+      Object.const_get(const_name) # rubocop:disable Sorbet/ConstantsFromStrings
     rescue NameError
       nil
     end

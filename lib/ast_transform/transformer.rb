@@ -1,3 +1,4 @@
+# typed: false
 # frozen_string_literal: true
 
 require 'ast_transform/line_aligned_emitter'
